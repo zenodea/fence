@@ -1,0 +1,22 @@
+{
+  "name": "fence",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "description": "herdr plugin: pens for your agents, fenced off from your secrets and the network",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "bin": {
+    "fence": "bin/fence"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "node --test 'test/**/*.test.ts'"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "typescript": "^7.0.2"
+  }
+}
