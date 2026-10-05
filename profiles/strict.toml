@@ -23,6 +23,9 @@ write = [
   "~/.local/share/amp",
   "~/.cache",
   "~/Library/Caches",
+  # zoxide records the folders you cd into; without this every cd is a blocked write
+  "~/Library/Application Support/zoxide",
+  "~/.local/share/zoxide",
 ]
 
 # Read-only even inside the folders above: things that run code later, outside
