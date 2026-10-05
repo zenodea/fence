@@ -75,9 +75,9 @@ list --plugin fence` shows its `plugin_root`) onto your `PATH`, e.g.
 
 `prefix+p` opens it over the space you're in.
 
-- **Pen** (`o`): the pen's folder and profile, and every pane in it: fenced, or what's running outside the fence. In a space that isn't a pen: `n` makes a new pen (a new space for the focused pane's folder), `f` fences this space, `p` picks the profile.
+- **Pen** (`o`): the pen's folder, its profile, and every pane in it. The profiles sit on one row: `←`/`→` or a number key switches. The network follows at once, in every pane. File rules are fixed when a shell starts, so panes on the old ones are marked, and `r` puts them on the new: it restarts the shell in idle panes (in place; the shell's own state is lost) and leaves alone any pane that's running something. In a space that isn't a pen: `n` makes a new pen (a new space for the focused pane's folder), `f` fences this space.
 - **Gates** (`g`): what was stopped lately, with `a` to let it through; the domains you've let through, with `x` to fence them off again; `+` to type one in. The profile's own domains are listed underneath.
-- **Files** (`h`): what the pen reached for and couldn't have, the files in its folder that are hidden right now, and the patterns hiding them. `+` hides a path or pattern for this pen, `u` shows a hidden file to it, `x` takes back what you changed. File rules are fixed when a pane's shell starts, so changes reach new panes; fenced shells keep theirs until they exit.
+- **Files** (`h`): what the pen reached for and couldn't have, the files in its folder that are hidden right now, and the patterns hiding them. `+` hides a path or pattern for this pen, `u` shows a hidden file to it, `x` takes back what you changed. Like a profile switch, changes reach new panes at once and the others when you press `r`.
 - **Log** (`l`): everything that happened at the fence.
 - **All pens** (`s`): every pen; `enter` goes there.
 
