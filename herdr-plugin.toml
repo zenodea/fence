@@ -1,0 +1,45 @@
+# fence: pens for your herdr agents. A pen is a herdr space whose shells run in
+# a sandbox (Seatbelt on macOS, bubblewrap on Linux): they write the pen's folder,
+# reach the domains on its list, and nothing else. See the README.
+id = "fence"
+name = "fence"
+version = "0.1.0"
+min_herdr_version = "0.9.0"
+description = "Pens for your agents: a herdr space fenced off from your secrets and the network"
+platforms = ["linux", "macos"]
+
+# When herdr starts, the shells of every pen are fenced again.
+[[startup]]
+command = ["node", "src/cli.ts", "startup"]
+
+# prefix+p (see README): the pen window for the space you're in.
+[[actions]]
+id = "open"
+title = "fence: this space's pen"
+command = ["node", "src/cli.ts", "open"]
+
+[[actions]]
+id = "new"
+title = "fence: new pen here"
+command = ["node", "src/cli.ts", "new"]
+
+[[actions]]
+id = "pen"
+title = "fence: make this space a pen"
+command = ["node", "src/cli.ts", "pen"]
+
+[[panes]]
+id = "window"
+title = "fence"
+placement = "overlay"
+command = ["node", "src/cli.ts", "ui"]
+
+# A pane opened in a pen is fenced as soon as its shell is ready.
+[[events]]
+on = "pane.created"
+command = ["node", "src/cli.ts", "event", "pane.created"]
+
+# Closing a pen's space forgets the pen.
+[[events]]
+on = "workspace.closed"
+command = ["node", "src/cli.ts", "event", "workspace.closed"]

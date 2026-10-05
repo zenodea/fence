@@ -1,0 +1,9 @@
+#!/bin/sh
+# fence's command, wherever it's linked from (a symlink in ~/.local/bin is fine).
+self="$0"
+while [ -L "$self" ]; do
+  link=$(readlink "$self")
+  case "$link" in /*) self="$link" ;; *) self="$(dirname "$self")/$link" ;; esac
+done
+root=$(cd "$(dirname "$self")/.." && pwd -P)
+exec node "$root/src/cli.ts" "$@"
