@@ -42,13 +42,13 @@ const listen = (server: Server, where: string | number) =>
     else server.listen(where, resolve);
   });
 
-function describeOp(op: string): string {
-  if (op.startsWith("file-write")) return "write to";
-  if (op.startsWith("file-read")) return "read";
-  if (op.startsWith("network")) return "connect to";
-  if (op === "appleevent-send") return "control another app";
-  if (op === "mach-lookup") return "reach";
-  return op;
+/** A toast's title for something the sandbox stopped. Says what, not who: agents often run under a version number. */
+export function denialTitle(op: string, target: string, proc: string): string {
+  if (op.startsWith("file-write")) return `blocked writing ${target}`;
+  if (op.startsWith("file-read")) return `blocked reading ${target}`;
+  if (op === "appleevent-send") return `blocked ${proc} controlling another app`;
+  if (op === "mach-lookup") return `blocked ${proc} reaching ${target.replace(/^.*global-name:?\s*/, "")}`;
+  return `blocked ${op} ${target}`;
 }
 
 export async function runFenced(run: FencedRun): Promise<number> {
@@ -116,7 +116,8 @@ export async function runFenced(run: FencedRun): Promise<number> {
         return;
       }
       const target = d.target || d.operation;
-      denied({ pen: penId, pane: run.pane, kind, target, detail: `${d.process}: ${d.operation}` }, name, `${d.process} tried to ${describeOp(d.operation)} ${target.replace(process.env.HOME ?? "\0", "~")}`);
+      const shown = target.replace(process.env.HOME ?? "\0", "~");
+      denied({ pen: penId, pane: run.pane, kind, target, detail: `${d.process}: ${d.operation}` }, name, denialTitle(d.operation, shown, d.process), `${name} · ${d.process} · prefix+p to see the pen`);
     });
   }
 
