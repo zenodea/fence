@@ -1,21 +1,26 @@
 // The pen window (prefix+p): the pen for the space you're in, what's been
-// stopped at its fence, and the gates you've opened. Also makes a pen when the
-// space isn't one.
+// stopped at its fence, the gates you've opened and the files it can't see.
+// Also makes a pen when the space isn't one.
+import { relative } from "node:path";
 import { readLog, record, type FenceEvent } from "../events.ts";
-import { createPen, fenceAll, penPanes, penThisWorkspace, setProfile, unpen, type PaneReport } from "../herd.ts";
+import { expandGlob, matchesAny } from "../glob.ts";
+import { createPen, fenceAll, penPanes, penThisWorkspace, prunePens, setProfile, unpen, type PaneReport } from "../herd.ts";
 import { herdr } from "../herdr/client.ts";
 import { cleanRule } from "../net/match.ts";
 import { home } from "../paths.ts";
 import { penForWorkspace, readPens, updatePen, type Pen } from "../pens.ts";
+import { makePolicy, type Policy } from "../policy.ts";
 import { DEFAULT_PROFILE, listProfiles, loadProfile, type Profile } from "../profile.ts";
 import { frame, pad, screen, style, when } from "./ansi.ts";
 
-export const SCREENS = ["pen", "gates", "log", "pens"] as const;
+export const SCREENS = ["pen", "gates", "files", "log", "pens"] as const;
 export type Screen = (typeof SCREENS)[number];
 
 const TABS: Record<Screen, { key: string; label: string }> = {
   pen: { key: "o", label: "Pen" },
   gates: { key: "g", label: "Gates" },
+  // f fences on the Pen tab, so Files takes h, for hidden.
+  files: { key: "h", label: "Files" },
   log: { key: "l", label: "Log" },
   pens: { key: "s", label: "All pens" },
 };
@@ -24,6 +29,13 @@ export type GateRow =
   | { kind: "blocked"; target: string; count: number; last: string }
   | { kind: "yours"; rule: string }
   | { kind: "profile"; rule: string };
+
+export type FileRow =
+  | { kind: "tried"; path: string; shown: string; count: number; last: string; why: "hidden" | "read-only" | "outside the pen" | "shown now" }
+  | { kind: "now"; path: string }
+  | { kind: "yours"; pattern: string }
+  | { kind: "shown"; pattern: string }
+  | { kind: "profile"; pattern: string };
 
 export type WindowData = {
   workspaceId: string | null;
@@ -34,13 +46,18 @@ export type WindowData = {
   panes: PaneReport[] | null;
   log: FenceEvent[];
   pens: Pen[];
+  /** The pen's rules with real paths; null when the space isn't a pen. */
+  policy: Policy | null;
+  /** Files in the pen that are hidden right now, relative to its folder. */
+  hiddenNow: string[];
 };
 
 export type Mode =
   | { kind: "normal" }
   | { kind: "pick-profile"; index: number; then: "new" | "pen" | "change" }
   | { kind: "confirm-unpen"; pen: Pen }
-  | { kind: "type-domain"; text: string };
+  | { kind: "type-domain"; text: string }
+  | { kind: "type-path"; text: string };
 
 export type ViewState = {
   screen: Screen;
@@ -73,6 +90,69 @@ export function gateRows(data: WindowData): GateRow[] {
   for (const rule of data.pen.allow) rows.push({ kind: "yours", rule });
   for (const rule of data.profile?.net.allow ?? []) rows.push({ kind: "profile", rule });
   return rows;
+}
+
+const ROUTINE = /\/\.(zsh|bash)_history|\/\.zcompdump|\/\.zsh_sessions\/|\.DS_Store$/;
+const isHidden = (policy: Policy, path: string) => matchesAny(path, policy.always) || (matchesAny(path, policy.hide) && !matchesAny(path, policy.show));
+/** A path the way the Files tab stores and shows it: relative inside the pen, ~ elsewhere. */
+export const penPath = (dir: string, path: string) => (path === dir || path.startsWith(dir + "/") ? relative(dir, path) || "." : tilde(path));
+
+/** What a pen hides right now: the files in its folder that match a hidden pattern. */
+export function hiddenInPen(policy: Policy): string[] {
+  const inside = policy.hide.filter((p) => p.startsWith(policy.dir + "/"));
+  const found = inside.flatMap(expandGlob).filter((f) => !matchesAny(f, policy.show));
+  return [...new Set(found)].map((f) => relative(policy.dir, f)).sort();
+}
+
+/** File rows: what the pen reached for lately, what's hidden now, then your changes and the profile's patterns. */
+export function fileRows(data: WindowData): FileRow[] {
+  const { pen, policy, profile } = data;
+  if (!pen || !policy) return [];
+  const rows: FileRow[] = [];
+  const tried = new Map<string, { count: number; last: string }>();
+  for (const e of data.log) {
+    if (e.kind !== "file" || e.verdict !== "denied" || ROUTINE.test(e.target)) continue;
+    tried.set(e.target, { count: (tried.get(e.target)?.count ?? 0) + 1, last: e.t });
+  }
+  for (const [path, t] of [...tried].sort((a, b) => b[1].last.localeCompare(a[1].last)).slice(0, 5)) {
+    const why = isHidden(policy, path) ? "hidden" : matchesAny(path, policy.protect) ? "read-only" : matchesAny(path, policy.write) ? "shown now" : "outside the pen";
+    rows.push({ kind: "tried", path, shown: penPath(policy.dir, path), why, ...t });
+  }
+  for (const path of data.hiddenNow.slice(0, 8)) rows.push({ kind: "now", path });
+  for (const pattern of pen.hide ?? []) rows.push({ kind: "yours", pattern });
+  for (const pattern of pen.show ?? []) rows.push({ kind: "shown", pattern });
+  for (const pattern of (profile?.files.hide ?? []).filter((h) => h.startsWith("{pen}")).slice(0, 6)) rows.push({ kind: "profile", pattern: pattern.replace("{pen}/", "") });
+  return rows;
+}
+
+function filesScreen(view: ViewState, data: WindowData): string[] {
+  if (!data.pen || !data.policy) return [`  ${style.dim("Not a pen, so nothing is hidden. Make one from the Pen tab.")}`];
+  const rows = fileRows(data);
+  const lines: string[] = [];
+  const heads = { tried: "Reached for lately", now: "Hidden in this pen now", yours: "Hidden by you", shown: "Shown by you, though the profile hides it", profile: `From the ${data.pen.profile} profile` };
+  let section = "";
+  rows.forEach((row, i) => {
+    if (row.kind !== section) {
+      if (section) lines.push("");
+      const extra = row.kind === "now" && data.hiddenNow.length > 8 ? style.dim(`  ${data.hiddenNow.length} files, the first 8`) : "";
+      lines.push(`  ${style.bold(heads[row.kind])}${extra}`);
+      section = row.kind;
+    }
+    const sel = i === view.selected;
+    const mark = sel ? style.cyan(" › ") : "   ";
+    const name = (s: string) => (sel ? style.bold(s) : s);
+    if (row.kind === "tried") lines.push(`${mark}${style.red("✗")} ${pad(name(row.shown), 44)}${style.dim(`${row.why} · ${row.count}× · ${when(row.last, view.now)}`)}`);
+    else if (row.kind === "now") lines.push(`${mark}${style.dim("∅")} ${name(row.path)}`);
+    else if (row.kind === "yours") lines.push(`${mark}${style.dim("∅")} ${name(row.pattern)}`);
+    else if (row.kind === "shown") lines.push(`${mark}${style.green("✓")} ${name(row.pattern)}`);
+    else lines.push(`${mark}${style.dim(`∅ ${row.pattern}`)}`);
+  });
+  if (!rows.some((r) => r.kind === "now")) lines.unshift(`  ${style.dim("No file in the pen's folder is hidden. + hides one; the sealed profile hides .env files and keys.")}`, "");
+  const elsewhere = data.policy.always.length + data.policy.hide.filter((h) => !h.startsWith(data.policy!.dir + "/")).length;
+  const more = (data.profile?.files.hide ?? []).filter((h) => h.startsWith("{pen}")).length - 6;
+  lines.push("", `  ${style.dim(`${more > 0 ? `…and ${more} more patterns. ` : ""}Outside the pen, ${elsewhere} places are hidden: keys, logins, shell history, herdr.`)}`);
+  if (matchesAny(`${data.policy.dir}/.git`, data.policy.protect)) lines.push(`  ${style.dim(".git is read-only here: the pen can read history and diff, not stage or commit.")}`);
+  return lines;
 }
 
 function paneLine(r: PaneReport): string {
@@ -110,6 +190,8 @@ function penScreen(view: ViewState, data: WindowData): string[] {
   lines.push(`  ${label("Profile")}${style.bold(pen.profile)}  ${style.dim(data.profile?.description ?? "missing!")}`);
   const domains = data.profile?.net.allow.includes("*") ? "any domain" : `${data.profile?.net.allow.length ?? 0} domains`;
   lines.push(`  ${label("Network")}${domains}${pen.allow.length ? ` + ${pen.allow.length} you let through` : ""}`);
+  const gitRo = data.policy && matchesAny(`${data.policy.dir}/.git`, data.policy.protect);
+  lines.push(`  ${label("Files")}${data.hiddenNow.length ? `${data.hiddenNow.length} hidden in the pen` : style.dim("nothing hidden in the pen")}${gitRo ? style.dim(" · .git read-only") : ""}`);
   lines.push("");
   if (!data.panes) lines.push(`  ${label("Panes")}${style.dim("looking…")}`);
   else if (!data.panes.length) lines.push(`  ${label("Panes")}${style.dim("none (the space is gone?)")}`);
@@ -169,6 +251,7 @@ function hints(view: ViewState, data: WindowData): [string, string][] {
   const m = view.mode;
   if (m.kind === "pick-profile") return [["↑↓", "choose"], ["enter", "use it"], ["esc", "back"]];
   if (m.kind === "type-domain") return [["enter", "let it through"], ["esc", "cancel"]];
+  if (m.kind === "type-path") return [["enter", "hide it"], ["esc", "cancel"]];
   if (m.kind === "confirm-unpen") return [["y", "yes"], ["n", "no"]];
   switch (view.screen) {
     case "pen":
@@ -177,6 +260,8 @@ function hints(view: ViewState, data: WindowData): [string, string][] {
         : [["n", "new pen"], ["f", "fence this"], ["p", "profile"], ["q", "close"]];
     case "gates":
       return [["↑↓", "select"], ["a", "let through"], ["x", "fence off"], ["+", "add a domain"], ["q", "close"]];
+    case "files":
+      return [["↑↓", "select"], ["u", "show to the pen"], ["x", "remove"], ["+", "hide a path"], ["q", "close"]];
     case "log":
       return [["q", "close"]];
     case "pens":
@@ -202,6 +287,7 @@ export function render(view: ViewState, data: WindowData, cols: number, rows: nu
     if (m.then === "change") body.push("", `  ${style.dim("New panes get it at once; shells already fenced keep theirs until they exit.")}`);
   } else if (view.screen === "pen") body = penScreen(view, data);
   else if (view.screen === "gates") body = gatesScreen(view, data);
+  else if (view.screen === "files") body = filesScreen(view, data);
   else if (view.screen === "log") body = logScreen(data, height);
   else body = pensScreen(view, data);
   body = body.slice(0, height);
@@ -209,6 +295,7 @@ export function render(view: ViewState, data: WindowData, cols: number, rows: nu
 
   let message = "";
   if (m.kind === "confirm-unpen") message = style.yellow(`  Stop fencing ${m.pen.name}? Shells already fenced stay fenced until they exit.  y yes · n no`);
+  else if (m.kind === "type-path") message = `  Hide from the pen: ${style.bold(m.text)}${style.inverse(" ")}  ${style.dim("e.g. config/secrets.yml, **/*.sqlite, ~/notes")}`;
   else if (m.kind === "type-domain") message = `  Let through: ${style.bold(m.text)}${style.inverse(" ")}  ${style.dim("e.g. example.com, *.example.com, example.com:8443")}`;
   else if (view.flash) message = `  ${(view.flash.tone === "ok" ? style.green : view.flash.tone === "warn" ? style.yellow : style.red)(view.flash.text)}`;
   const hintLine = "  " + hints(view, data).map(([k, what]) => `${keycap(k)} ${style.dim(what)}`).join("  ");
@@ -230,7 +317,18 @@ export async function runWindow(opts: { workspaceId: string | null; paneId: stri
     try {
       profiles = listProfiles();
     } catch {}
-    return { workspaceId: opts.workspaceId, cwd: opts.cwd, pen, profile, profiles, panes, log: pen ? readLog(pen.id, 400) : [], pens: readPens() };
+    let policy: Policy | null = null;
+    try {
+      policy = pen && profile ? makePolicy(profile, { dir: pen.dir, pen }) : null;
+    } catch {}
+    return { workspaceId: opts.workspaceId, cwd: opts.cwd, pen, profile, profiles, panes, log: pen ? readLog(pen.id, 400) : [], pens: readPens(), policy, hiddenNow: policy ? hiddenNow(policy) : [] };
+  };
+  // Walking the pen's folder is the slow part, so it's done every few seconds, or at once when the rules change.
+  let walked: { key: string; at: number; files: string[] } | null = null;
+  const hiddenNow = (policy: Policy): string[] => {
+    const key = JSON.stringify([policy.dir, policy.hide, policy.show]);
+    if (!walked || walked.key !== key || Date.now() - walked.at > 4000) walked = { key, at: Date.now(), files: hiddenInPen(policy) };
+    return walked.files;
   };
 
   const view: ViewState = { screen: initial, selected: 0, mode: { kind: "normal" }, draftProfile: DEFAULT_PROFILE, flash: null, now: Date.now() };
@@ -258,7 +356,7 @@ export async function runWindow(opts: { workspaceId: string | null; paneId: stri
   const refresh = () => {
     view.now = Date.now();
     data = load(data.panes);
-    const max = view.screen === "gates" ? gateRows(data).length : view.screen === "pens" ? data.pens.length : 0;
+    const max = view.screen === "gates" ? gateRows(data).length : view.screen === "files" ? fileRows(data).length : view.screen === "pens" ? data.pens.length : 0;
     view.selected = Math.max(0, Math.min(view.selected, max - 1));
     draw();
   };
@@ -312,6 +410,16 @@ export async function runWindow(opts: { workspaceId: string | null; paneId: stri
     refresh();
   };
 
+  /** Files only change for shells that start afterwards: the sandbox's rules are fixed when it starts. */
+  const WHEN = "New panes get it; fenced shells keep their rules until they exit.";
+  const changeFiles = (change: (pen: Pen) => Pen, logged: string, said: string) => {
+    if (!data.pen) return;
+    updatePen(data.pen.id, change);
+    record({ pen: data.pen.id, pane: null, kind: "info", verdict: "info", target: logged });
+    flash(`${said} ${WHEN}`);
+    refresh();
+  };
+
   const onKey = (key: string) => {
     if (key === "\x03") return close();
     const m = view.mode;
@@ -331,6 +439,18 @@ export async function runWindow(opts: { workspaceId: string | null; paneId: stri
         view.mode = { kind: "normal" };
         if (rule) allowRule(rule);
         else flash(`${m.text || "that"} isn't a domain fence understands`, "error");
+      } else if (key === "\x7f") m.text = m.text.slice(0, -1);
+      else if (/^[\x20-\x7e]+$/.test(key)) m.text += key;
+      draw();
+      return;
+    }
+    if (m.kind === "type-path") {
+      if (key === "\x1b") view.mode = { kind: "normal" };
+      else if (key === "\r") {
+        const path = m.text.trim();
+        view.mode = { kind: "normal" };
+        if (path && !path.includes('"') && data.pen) changeFiles((p) => ({ ...p, hide: [...new Set([...(p.hide ?? []), path])], show: (p.show ?? []).filter((x) => x !== path) }), `hid ${path}`, `${path} is hidden.`);
+        else if (path) flash("fence can't hide a path with a double quote in it", "error");
       } else if (key === "\x7f") m.text = m.text.slice(0, -1);
       else if (/^[\x20-\x7e]+$/.test(key)) m.text += key;
       draw();
@@ -358,6 +478,8 @@ export async function runWindow(opts: { workspaceId: string | null; paneId: stri
         return show("pen");
       case "g":
         return show("gates");
+      case "h":
+        return show("files");
       case "l":
         return show("log");
       case "s":
@@ -413,6 +535,33 @@ export async function runWindow(opts: { workspaceId: string | null; paneId: stri
       return;
     }
 
+    if (view.screen === "files") {
+      const rows = fileRows(data);
+      const row = rows[view.selected];
+      if (key === "\x1b[A" || key === "k") view.selected = Math.max(0, view.selected - 1);
+      else if (key === "\x1b[B" || key === "j") view.selected = Math.min(rows.length - 1, view.selected + 1);
+      else if (key === "+" && data.pen) view.mode = { kind: "type-path", text: "" };
+      else if (key === "u" && row && data.policy) {
+        const path = row.kind === "tried" ? row.shown : row.kind === "now" ? row.path : null;
+        if (row.kind === "tried" && row.why === "shown now") return flash("That one is shown already. New panes can read it.", "warn");
+        if (row.kind === "tried" && row.why !== "hidden") return flash(row.why === "read-only" ? "That one isn't hidden, it's read-only: it would run outside the pen later." : "That one isn't hidden, it's outside the pen: read-only. Widen files.write in a profile to change that.", "warn");
+        if (row.kind === "tried" && matchesAny(row.path, data.policy.always)) return flash("herdr's and fence's own files stay hidden from every pen.", "warn");
+        if (path) {
+          // Hidden by you: just take it back. Hidden by the profile: an exception for this pen.
+          const mine = (data.pen?.hide ?? []).includes(path);
+          return changeFiles((p) => (mine ? { ...p, hide: (p.hide ?? []).filter((x) => x !== path) } : { ...p, show: [...new Set([...(p.show ?? []), path])] }), `showed ${path}`, `${path} is shown to the pen.`);
+        }
+        if (row.kind === "yours") return changeFiles((p) => ({ ...p, hide: (p.hide ?? []).filter((x) => x !== row.pattern) }), `showed ${row.pattern}`, `${row.pattern} is shown to the pen.`);
+        if (row.kind === "profile") return flash(`That pattern comes from the ${data.pen?.profile} profile. Select a file under "Hidden in this pen now" to show just that one.`, "warn");
+      } else if (key === "x" && row) {
+        if (row.kind === "yours") return changeFiles((p) => ({ ...p, hide: (p.hide ?? []).filter((x) => x !== row.pattern) }), `showed ${row.pattern}`, `${row.pattern} isn't hidden any more.`);
+        if (row.kind === "shown") return changeFiles((p) => ({ ...p, show: (p.show ?? []).filter((x) => x !== row.pattern) }), `hid ${row.pattern}`, `${row.pattern} is hidden again.`);
+        return flash("Only what you hid or showed can be removed here.", "warn");
+      }
+      draw();
+      return;
+    }
+
     if (view.screen === "pens") {
       if (key === "\x1b[A" || key === "k") view.selected = Math.max(0, view.selected - 1);
       else if (key === "\x1b[B" || key === "j") view.selected = Math.min(data.pens.length - 1, view.selected + 1);
@@ -438,5 +587,6 @@ export async function runWindow(opts: { workspaceId: string | null; paneId: stri
   setInterval(() => void refreshPanes(), 3000);
   draw();
   void refreshPanes();
+  void prunePens().then(refresh, () => {});
   await new Promise(() => {});
 }

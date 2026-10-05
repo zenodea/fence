@@ -8,13 +8,14 @@
 //   fence pen [--profile P]             make the focused space a pen
 //   fence unpen                         stop fencing the focused space
 //   fence allow DOMAIN [--pen ID]       let a domain through for a pen
+//   fence hide PATH [--pen ID]          hide a file or pattern from a pen (show to undo)
 //   fence status | log | profiles | policy
 //
 // herdr runs the rest: open (the window), ui, event, startup.
 import { spawnSync } from "node:child_process";
 import { basename } from "node:path";
 import { readLog, record } from "./events.ts";
-import { createPen, fenceAll, onEvent, penPanes, penThisWorkspace, reconcile, unpen } from "./herd.ts";
+import { createPen, fenceAll, onEvent, penPanes, penThisWorkspace, prunePens, reconcile, unpen } from "./herd.ts";
 import { notify } from "./herdr/client.ts";
 import { cleanRule } from "./net/match.ts";
 import { herdrBin } from "./paths.ts";
@@ -85,6 +86,12 @@ async function main(): Promise<void> {
 
   switch (command) {
     case "shell": {
+      // Already inside a pen (the line was run twice, or by hand): the fence is
+      // inherited, so just be the shell rather than end the pane.
+      if (process.env.FENCE_ACTIVE) {
+        const argv = args.rest.length ? args.rest : [process.env.SHELL || "/bin/sh", "-l"];
+        process.exit(spawnSync(argv[0]!, argv.slice(1), { stdio: "inherit" }).status ?? 0);
+      }
       const pen = str(args, "pen") ? penById(str(args, "pen")!) : penForWorkspace(process.env.HERDR_WORKSPACE_ID);
       try {
         if (!pen && !str(args, "profile")) throw new Error("this space isn't a pen (pass --profile to fence a shell anyway)");
@@ -180,7 +187,23 @@ async function main(): Promise<void> {
       return;
     }
 
+    case "hide":
+    case "show": {
+      const path = args.positional[0]?.trim();
+      if (!path || path.includes('"')) return fail(`usage: fence ${command} PATH [--pen ID]   (a path inside the pen, ~/…, or a pattern like **/*.sqlite)`, false);
+      const pen = str(args, "pen") ? penById(str(args, "pen")!) : penForWorkspace(herdrContext().workspaceId);
+      if (!pen) return fail("which pen? pass --pen ID (see fence status)", false);
+      const without = (list: string[] | undefined) => (list ?? []).filter((x) => x !== path);
+      // show takes back a hide of yours, or makes an exception to the profile's.
+      const wasMine = (pen.hide ?? []).includes(path);
+      updatePen(pen.id, (p) => (command === "hide" ? { ...p, hide: [...without(p.hide), path], show: without(p.show) } : wasMine ? { ...p, hide: without(p.hide) } : { ...p, show: [...without(p.show), path] }));
+      record({ pen: pen.id, pane: null, kind: "info", verdict: "info", target: `${command === "hide" ? "hid" : "showed"} ${path}` });
+      console.log(`${pen.name}: ${path} is ${command === "hide" ? "hidden" : "shown"}. New panes get it; fenced shells keep their rules until they exit.`);
+      return;
+    }
+
     case "status": {
+      await prunePens().catch(() => []);
       const pens = readPens();
       if (!pens.length) console.log("No pens yet. `fence new` makes one.");
       for (const pen of pens) {
@@ -249,7 +272,7 @@ async function main(): Promise<void> {
     case "--help":
     case "-h": {
       const { readFileSync } = await import("node:fs");
-      const head = readFileSync(new URL(import.meta.url), "utf8").split("\n").filter((l) => l.startsWith("//")).slice(0, 14);
+      const head = readFileSync(new URL(import.meta.url), "utf8").split("\n").filter((l) => l.startsWith("//")).slice(0, 15);
       console.log(head.map((l) => l.replace(/^\/\/ ?/, "")).join("\n"));
       return;
     }
