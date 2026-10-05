@@ -4,7 +4,7 @@
 import { relative } from "node:path";
 import { readLog, record, type FenceEvent } from "../events.ts";
 import { expandGlob, matchesAny } from "../glob.ts";
-import { createPen, fenceAll, penPanes, penThisWorkspace, prunePens, setProfile, unpen, type PaneReport } from "../herd.ts";
+import { applyToPanes, createPen, penPanes, penThisWorkspace, prunePens, setProfile, unpen, type PaneReport } from "../herd.ts";
 import { herdr } from "../herdr/client.ts";
 import { cleanRule } from "../net/match.ts";
 import { home } from "../paths.ts";
@@ -54,7 +54,6 @@ export type WindowData = {
 
 export type Mode =
   | { kind: "normal" }
-  | { kind: "pick-profile"; index: number; then: "new" | "pen" | "change" }
   | { kind: "confirm-unpen"; pen: Pen }
   | { kind: "type-domain"; text: string }
   | { kind: "type-path"; text: string };
@@ -155,15 +154,20 @@ function filesScreen(view: ViewState, data: WindowData): string[] {
   return lines;
 }
 
+const short = (s: string, n = 34) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+
 function paneLine(r: PaneReport): string {
-  const who = r.pane.agent ? style.dim(` · ${r.pane.agent}`) : "";
-  switch (r.state.state) {
-    case "fenced":
-      return `${style.green("● fenced")}${who}`;
+  const s = r.state;
+  switch (s.state) {
+    case "fenced": {
+      const doing = s.running ? style.dim(` · running ${short(s.running)}`) : style.dim(" · idle");
+      if (r.stale) return `${style.yellow("◐ fenced, old rules")}${style.dim(` (${s.rules?.profile ?? "?"})`)}${doing}`;
+      return `${style.green("● fenced")}${doing}`;
+    }
     case "busy":
-      return `${style.red("✗ not fenced")} ${style.dim(`running ${r.state.command.slice(0, 50)}`)}`;
+      return `${style.red("✗ not fenced")} ${style.dim(`· running ${short(s.command, 44)}`)}`;
     case "shell":
-      return `${style.yellow("○ about to be fenced")}`;
+      return `${style.yellow("○ not fenced yet")}${style.dim(" · idle")}`;
     case "plugin":
       return style.dim("a plugin's window");
     default:
@@ -171,39 +175,63 @@ function paneLine(r: PaneReport): string {
   }
 }
 
+/** Built-in profiles from tightest to loosest, then yours. */
+const ORDER = ["sealed", "strict", "standard", "open"];
+export const ordered = (profiles: Profile[]) =>
+  [...profiles].sort((a, b) => (ORDER.indexOf(a.name) + 1 || 99) - (ORDER.indexOf(b.name) + 1 || 99) || a.name.localeCompare(b.name));
+
+/** The profile switch: every profile on one row, the current one lit, each with its number key. */
+function profileRows(data: WindowData, current: string): string[] {
+  const row = ordered(data.profiles)
+    .map((p, i) => (p.name === current ? style.inverse(style.bold(` ${i + 1} ${p.name} `)) : `${style.dim(` ${i + 1}`)} ${p.name} `))
+    .join(" ");
+  const about = data.profiles.find((p) => p.name === current)?.description ?? style.red("this profile is missing");
+  return [`  ${label("Profile")}${row}  ${keycap("←→")}`, `  ${label("")} ${style.dim(about)}`];
+}
+
+/** Panes that aren't on the pen's current rules, split by whether r can fix them now. */
+export function behind(panes: PaneReport[] | null): { ready: PaneReport[]; waiting: PaneReport[] } {
+  const ready: PaneReport[] = [];
+  const waiting: PaneReport[] = [];
+  for (const r of panes ?? []) {
+    const s = r.state;
+    if (s.state === "shell" || (s.state === "fenced" && r.stale && s.idle && s.rules)) ready.push(r);
+    else if (s.state === "busy" || (s.state === "fenced" && r.stale)) waiting.push(r);
+  }
+  return { ready, waiting };
+}
+
 function penScreen(view: ViewState, data: WindowData): string[] {
   const lines: string[] = [];
   if (!data.pen) {
     lines.push(`  ${style.bold("This space isn't a pen.")}`, "");
-    lines.push(`  ${keycap("n")} ${style.bold("new pen")}      a new space for ${tilde(data.cwd)}, every shell in it fenced`);
-    lines.push(`  ${keycap("f")} ${style.bold("fence this")}   this space becomes the pen; shells get fenced, what's running now stays as it is`);
-    lines.push("");
-    const p = data.profiles.find((x) => x.name === view.draftProfile);
-    lines.push(`  ${label("Profile")}${style.bold(view.draftProfile)}  ${style.dim(p?.description ?? "")}   ${keycap("p")} ${style.dim("change")}`);
     lines.push(`  ${label("Folder")}${tilde(data.cwd)}`);
+    lines.push(...profileRows(data, view.draftProfile), "");
+    lines.push(`  ${keycap("n")} ${style.bold("new pen")}      a new space for this folder, every shell in it fenced`);
+    lines.push(`  ${keycap("f")} ${style.bold("fence this")}   this space becomes the pen; what's running now stays as it is`);
     return lines;
   }
   const pen = data.pen;
-  const blocked = data.log.filter((e) => e.verdict === "denied");
-  lines.push(`  ${label("Pen")}${style.bold(pen.name)}  ${style.dim(`${pen.id} · space ${pen.workspaceId}`)}`);
-  lines.push(`  ${label("Folder")}${tilde(pen.dir)}`);
-  lines.push(`  ${label("Profile")}${style.bold(pen.profile)}  ${style.dim(data.profile?.description ?? "missing!")}`);
+  // What every shell trips over as it starts (its history file) isn't news.
+  const blocked = data.log.filter((e) => e.verdict === "denied" && !ROUTINE.test(e.target));
+  lines.push(`  ${label("Folder")}${tilde(pen.dir)}  ${style.dim(`· ${pen.id} · space ${pen.workspaceId}`)}`);
+  lines.push(...profileRows(data, pen.profile));
   const domains = data.profile?.net.allow.includes("*") ? "any domain" : `${data.profile?.net.allow.length ?? 0} domains`;
-  lines.push(`  ${label("Network")}${domains}${pen.allow.length ? ` + ${pen.allow.length} you let through` : ""}`);
+  lines.push(`  ${label("Network")}${pad(`${domains}${pen.allow.length ? ` + ${pen.allow.length} you let through` : ""}`, 42)}${keycap("g")}`);
   const gitRo = data.policy && matchesAny(`${data.policy.dir}/.git`, data.policy.protect);
-  lines.push(`  ${label("Files")}${data.hiddenNow.length ? `${data.hiddenNow.length} hidden in the pen` : style.dim("nothing hidden in the pen")}${gitRo ? style.dim(" · .git read-only") : ""}`);
+  lines.push(`  ${label("Files")}${pad(`${data.hiddenNow.length ? `${data.hiddenNow.length} hidden in the pen` : "nothing hidden in the pen"}${gitRo ? " · .git read-only" : ""}`, 42)}${keycap("h")}`);
   lines.push("");
   if (!data.panes) lines.push(`  ${label("Panes")}${style.dim("looking…")}`);
   else if (!data.panes.length) lines.push(`  ${label("Panes")}${style.dim("none (the space is gone?)")}`);
-  else data.panes.forEach((r, i) => lines.push(`  ${label(i === 0 ? "Panes" : "")}${pad(r.pane.pane_id, 9)}${paneLine(r)}`));
-  const unfenced = data.panes?.filter((r) => r.state.state === "busy").length ?? 0;
-  if (unfenced) {
-    lines.push(`  ${label("")}${style.yellow(`${unfenced} pane${unfenced === 1 ? " runs" : "s run"} outside the fence.`)} Quit what's running there and press ${keycap("f")}.`);
-  }
+  else data.panes.filter((r) => r.state.state !== "plugin").forEach((r, i) => lines.push(`  ${label(i === 0 ? "Panes" : "")}${pad(r.pane.pane_id, 9)}${paneLine(r)}`));
+  const { ready, waiting } = behind(data.panes);
+  const n = (list: PaneReport[]) => `${list.length} pane${list.length === 1 ? "" : "s"}`;
+  if (ready.length) lines.push(`  ${label("")}${keycap("r")} ${style.yellow(`put ${n(ready)} on the current rules`)}${style.dim(" · their shell restarts")}`);
+  if (waiting.length) lines.push(`  ${label("")}${style.dim(`${n(waiting)} busy: left alone. Press r when ${waiting.length === 1 ? "it's" : "they're"} idle.`)}`);
   lines.push("");
   const last = blocked[blocked.length - 1];
   lines.push(
-    `  ${label("Stopped")}${blocked.length ? `${blocked.length} time${blocked.length === 1 ? "" : "s"}${style.dim(` · last ${last!.target.replace(home, "~")}, ${when(last!.t, view.now)}`)}` : style.dim("nothing yet")}`,
+    `  ${label("Blocked")}${blocked.length ? `${blocked.length} time${blocked.length === 1 ? "" : "s"}${style.dim(` · last ${(data.policy ? penPath(data.policy.dir, last!.target) : tilde(last!.target))}, ${when(last!.t, view.now)}`)}` : style.dim("nothing yet")}`,
   );
   return lines;
 }
@@ -249,15 +277,14 @@ function pensScreen(view: ViewState, data: WindowData): string[] {
 
 function hints(view: ViewState, data: WindowData): [string, string][] {
   const m = view.mode;
-  if (m.kind === "pick-profile") return [["↑↓", "choose"], ["enter", "use it"], ["esc", "back"]];
   if (m.kind === "type-domain") return [["enter", "let it through"], ["esc", "cancel"]];
   if (m.kind === "type-path") return [["enter", "hide it"], ["esc", "cancel"]];
   if (m.kind === "confirm-unpen") return [["y", "yes"], ["n", "no"]];
   switch (view.screen) {
     case "pen":
       return data.pen
-        ? [["p", "profile"], ["f", "fence panes"], ["u", "unfence"], ["q", "close"]]
-        : [["n", "new pen"], ["f", "fence this"], ["p", "profile"], ["q", "close"]];
+        ? [["←→", "profile"], ["r", "apply to panes"], ["u", "unfence"], ["q", "close"]]
+        : [["←→", "profile"], ["n", "new pen"], ["f", "fence this"], ["q", "close"]];
     case "gates":
       return [["↑↓", "select"], ["a", "let through"], ["x", "fence off"], ["+", "add a domain"], ["q", "close"]];
     case "files":
@@ -278,14 +305,7 @@ export function render(view: ViewState, data: WindowData, cols: number, rows: nu
 
   let body: string[];
   const m = view.mode;
-  if (m.kind === "pick-profile") {
-    body = [`  ${style.bold(m.then === "change" ? "A new profile for this pen" : "Which profile?")}`, ""];
-    data.profiles.forEach((p, i) => {
-      const sel = i === m.index;
-      body.push(`${sel ? style.cyan(" › ") : "   "}${pad(sel ? style.bold(p.name) : p.name, 12)}${style.dim(p.description)}${p.source === "user" ? style.dim(" (yours)") : ""}`);
-    });
-    if (m.then === "change") body.push("", `  ${style.dim("New panes get it at once; shells already fenced keep theirs until they exit.")}`);
-  } else if (view.screen === "pen") body = penScreen(view, data);
+  if (view.screen === "pen") body = penScreen(view, data);
   else if (view.screen === "gates") body = gatesScreen(view, data);
   else if (view.screen === "files") body = filesScreen(view, data);
   else if (view.screen === "log") body = logScreen(data, height);
@@ -349,8 +369,12 @@ export async function runWindow(opts: { workspaceId: string | null; paneId: stri
   const refreshPanes = async () => {
     if (!data.pen) return;
     try {
-      data.panes = await penPanes(data.pen);
-    } catch {}
+      // Awaited first: `data` is replaced by every refresh, and the answer belongs to the newest one.
+      const panes = await penPanes(data.pen);
+      data.panes = panes;
+    } catch (err) {
+      view.flash = { text: `Couldn't look at the panes: ${(err as Error).message}`, tone: "error" };
+    }
     draw();
   };
   const refresh = () => {
@@ -372,7 +396,7 @@ export async function runWindow(opts: { workspaceId: string | null; paneId: stri
     flash(start, "warn");
     try {
       const msg = await fn();
-      if (msg) flash(msg, /not fenced|isn't|couldn't/.test(msg) ? "warn" : "ok");
+      if (msg) flash(msg, /not fenced|isn't|couldn't|left alone/.test(msg) ? "warn" : "ok");
     } catch (err) {
       flash((err as Error).message, "error");
     }
@@ -383,22 +407,38 @@ export async function runWindow(opts: { workspaceId: string | null; paneId: stri
   const problemsMsg = (name: string, problems: PaneReport[]) =>
     problems.length ? `${name} is a pen; ${problems.length} pane${problems.length === 1 ? " is" : "s are"} still running something outside it` : `${name} is a pen; every pane is fenced`;
 
-  const pickProfile = (then: "new" | "pen" | "change") => {
-    const current = then === "change" ? data.pen?.profile : view.draftProfile;
-    view.mode = { kind: "pick-profile", then, index: Math.max(0, data.profiles.findIndex((p) => p.name === current)) };
-    draw();
-  };
-  const usedProfile = (then: "new" | "pen" | "change", name: string) => {
-    view.mode = { kind: "normal" };
-    if (then === "change" && data.pen) {
-      setProfile(data.pen, name);
-      record({ pen: data.pen.id, pane: null, kind: "info", verdict: "info", target: `profile is now ${name}` });
-      flash(`${data.pen.name} uses ${name} now. New panes get it; restart fenced shells to apply it there.`);
-      refresh();
-    } else {
+  /** Switch the pen's profile (or the one a new pen will get). Network follows at once; files need r. */
+  const useProfile = (name: string) => {
+    if (!data.pen) {
       view.draftProfile = name;
-      draw();
+      return draw();
     }
+    if (name === data.pen.profile) return;
+    setProfile(data.pen, name);
+    record({ pen: data.pen.id, pane: null, kind: "info", verdict: "info", target: `profile is now ${name}` });
+    refresh();
+    void refreshPanes().then(() => {
+      const { ready, waiting } = behind(data.panes);
+      flash(`${name}. Network follows at once.${ready.length ? " Press r to put the panes on its file rules." : waiting.length ? " The busy panes keep their file rules until they're idle." : ""}`);
+    });
+  };
+  const stepProfile = (by: number) => {
+    const list = ordered(data.profiles);
+    const at = list.findIndex((p) => p.name === (data.pen?.profile ?? view.draftProfile));
+    const next = list[(at + by + list.length) % list.length];
+    if (next) useProfile(next.name);
+  };
+  const applyNow = () => {
+    const pen = data.pen;
+    if (!pen) return;
+    void act("Applying to the panes…", async () => {
+      const a = await applyToPanes(pen);
+      const did = [a.restarted ? `restarted ${a.restarted}` : "", a.fenced ? `fenced ${a.fenced}` : ""].filter(Boolean).join(", ");
+      const left = a.waiting.length ? `${a.waiting.length} busy pane${a.waiting.length === 1 ? "" : "s"} left alone` : "";
+      if (!did && !left) return "Every pane is on the current rules already.";
+      return [did && `${did[0]!.toUpperCase()}${did.slice(1)}.`, left && `${left[0]!.toUpperCase()}${left.slice(1)}, on ${a.waiting.length === 1 ? "its" : "their"} old file rules.`].filter(Boolean).join(" ");
+    });
+    setTimeout(() => void refreshPanes(), 1500);
   };
 
   const allowRule = (rule: string) => {
@@ -411,7 +451,7 @@ export async function runWindow(opts: { workspaceId: string | null; paneId: stri
   };
 
   /** Files only change for shells that start afterwards: the sandbox's rules are fixed when it starts. */
-  const WHEN = "New panes get it; fenced shells keep their rules until they exit.";
+  const WHEN = "New panes get it. Press r to put idle panes on it now.";
   const changeFiles = (change: (pen: Pen) => Pen, logged: string, said: string) => {
     if (!data.pen) return;
     updatePen(data.pen.id, change);
@@ -456,15 +496,6 @@ export async function runWindow(opts: { workspaceId: string | null; paneId: stri
       draw();
       return;
     }
-    if (m.kind === "pick-profile") {
-      if (key === "\x1b" || key === "q") view.mode = { kind: "normal" };
-      else if (key === "\x1b[A" || key === "k") m.index = Math.max(0, m.index - 1);
-      else if (key === "\x1b[B" || key === "j") m.index = Math.min(data.profiles.length - 1, m.index + 1);
-      else if (key === "\r" && data.profiles[m.index]) return usedProfile(m.then, data.profiles[m.index]!.name);
-      draw();
-      return;
-    }
-
     const show = (s: Screen) => {
       view.screen = s;
       view.selected = 0;
@@ -490,8 +521,15 @@ export async function runWindow(opts: { workspaceId: string | null; paneId: stri
         return show(SCREENS[(SCREENS.indexOf(view.screen) + SCREENS.length - 1) % SCREENS.length]!);
     }
 
+    if (key === "r" && data.pen) return applyNow();
+
     if (view.screen === "pen") {
-      if (key === "p") return pickProfile(data.pen ? "change" : "new");
+      if (key === "\x1b[D") return stepProfile(-1);
+      if (key === "\x1b[C" || key === "p") return stepProfile(1);
+      if (/^[1-9]$/.test(key)) {
+        const picked = ordered(data.profiles)[Number(key) - 1];
+        return picked ? useProfile(picked.name) : undefined;
+      }
       if (!data.pen && key === "n") {
         return void act("Building the pen…", async () => {
           const { pen, problems } = await createPen({ name: opts.cwd.split("/").pop() || "pen", dir: opts.cwd, profile: view.draftProfile });
@@ -506,10 +544,7 @@ export async function runWindow(opts: { workspaceId: string | null; paneId: stri
           return problemsMsg(pen.name, problems);
         });
       }
-      if (data.pen && key === "f") {
-        const pen = data.pen;
-        return void act("Fencing every shell in the pen…", async () => problemsMsg(pen.name, await fenceAll(pen)));
-      }
+      if (data.pen && key === "f") return applyNow();
       if (data.pen && key === "u") {
         view.mode = { kind: "confirm-unpen", pen: data.pen };
         return draw();

@@ -209,7 +209,7 @@ async function main(): Promise<void> {
       for (const pen of pens) {
         console.log(`${style.bold(pen.name)} ${style.dim(`${pen.id} · space ${pen.workspaceId} · ${pen.profile} · ${pen.dir}`)}`);
         for (const r of await penPanes(pen)) {
-          const s = r.state.state === "fenced" ? style.green("fenced") : r.state.state === "busy" ? style.red(`not fenced: ${r.state.command}`) : style.yellow(r.state.state);
+          const s = r.state.state === "fenced" ? (r.stale ? style.yellow(`fenced, old rules (${r.state.rules?.profile ?? "?"})`) : style.green("fenced")) : r.state.state === "busy" ? style.red(`not fenced: ${r.state.command}`) : style.yellow(r.state.state);
           console.log(`  ${r.pane.pane_id}  ${s}`);
         }
       }
