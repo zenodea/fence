@@ -2,9 +2,10 @@
 // behind the fence. herdr can't start a pane with a command, so fence waits for
 // the pane's shell to sit at its prompt and has it `exec` into `fence shell`.
 import { execFileSync } from "node:child_process";
-import { readlinkSync, realpathSync } from "node:fs";
+import { closeSync, openSync, readlinkSync, realpathSync, rmSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { herdr, listPanes, listWorkspaces, processInfo, type PaneInfo } from "./herdr/client.ts";
-import { cliPath, fenceBin } from "./paths.ts";
+import { cliPath, ensureDir, fenceBin, stateDir } from "./paths.ts";
 import { addPen, penForWorkspace, readPens, removePen, updatePen, type Pen } from "./pens.ts";
 import { DEFAULT_PROFILE, loadProfile } from "./profile.ts";
 
@@ -86,6 +87,45 @@ export const fenceLine = (pen: Pen) => ` exec '${fenceBin.replaceAll("'", "'\\''
  * reported, never typed into.
  */
 export async function fencePane(pen: Pen, paneId: string, waitMs = 8000): Promise<PaneState> {
+  // Making a pen and herdr's pane.created hook both get here for the same pane.
+  // Only one may type into it: the line run twice would replace the fenced shell.
+  const release = claim(paneId);
+  if (!release) {
+    const until = Date.now() + waitMs;
+    let state = await paneState(paneId);
+    while (state.state === "shell" && Date.now() < until) {
+      await sleep(250);
+      state = await paneState(paneId);
+    }
+    return state;
+  }
+  try {
+    return await fenceClaimed(pen, paneId, waitMs);
+  } finally {
+    release();
+  }
+}
+
+const CLAIM_MS = 20_000;
+/** Take the right to fence a pane, or null if someone else is at it. */
+function claim(paneId: string): (() => void) | null {
+  const file = join(ensureDir(join(stateDir, "fencing")), paneId.replace(/[^A-Za-z0-9_-]/g, "_"));
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      closeSync(openSync(file, "wx"));
+      return () => rmSync(file, { force: true });
+    } catch {
+      try {
+        // Left behind by a run that died: take it over.
+        if (Date.now() - statSync(file).mtimeMs > CLAIM_MS) rmSync(file, { force: true });
+        else return null;
+      } catch {}
+    }
+  }
+  return null;
+}
+
+async function fenceClaimed(pen: Pen, paneId: string, waitMs: number): Promise<PaneState> {
   const until = Date.now() + waitMs;
   let state = await paneState(paneId);
   while (state.state !== "shell" && state.state !== "fenced" && state.state !== "plugin" && Date.now() < until) {
@@ -191,15 +231,18 @@ export async function onEvent(name: string, json: string | undefined): Promise<s
   return `${paneId}: ${state.state}`;
 }
 
+/** Forget pens whose space is gone (herdr doesn't always say when the last pane exits). */
+export async function prunePens(): Promise<Pen[]> {
+  const live = new Set((await listWorkspaces()).map((w) => w.workspace_id));
+  const gone = readPens().filter((p) => !live.has(p.workspaceId));
+  for (const pen of gone) removePen(pen.id);
+  return gone;
+}
+
 /** At herdr start: fence the shells of every pen that's still there. */
 export async function reconcile(): Promise<string[]> {
-  const live = new Set((await listWorkspaces()).map((w) => w.workspace_id));
-  const out: string[] = [];
+  const out = (await prunePens()).map((pen) => `${pen.name}: its space is gone, forgotten`);
   for (const pen of readPens()) {
-    if (!live.has(pen.workspaceId)) {
-      out.push(`${pen.name}: its space is gone`);
-      continue;
-    }
     const problems = await fenceAll(pen, 8000);
     out.push(`${pen.name}: ${problems.length ? `${problems.length} pane(s) not fenced` : "all fenced"}`);
   }
