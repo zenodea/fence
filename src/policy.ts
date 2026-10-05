@@ -1,8 +1,10 @@
 // A profile made concrete for one pen: absolute paths, the allow list, the
 // environment. The sandbox backends only ever see this.
-import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { configDir, herdrHome, herdrState, pluginRoot, runDir, stateDir } from "./paths.ts";
+import { configDir, ensureDir, herdrHome, herdrState, panesDir, pluginRoot, runDir, stateDir } from "./paths.ts";
 import type { Pen } from "./pens.ts";
 import { expandPath, type Profile } from "./profile.ts";
 
@@ -59,6 +61,32 @@ export function makePolicy(profile: Profile, opts: { dir: string; pen?: Pen | nu
     tripwires: profile.tripwires,
   };
 }
+
+/**
+ * A fingerprint of the rules a shell is born with and keeps: files, the
+ * environment, what's switched on. Domains aren't in it; those are read live.
+ */
+export function rulesStamp(policy: Policy, profile: Profile): string {
+  const fixed = [policy.dir, policy.write, policy.protect, policy.hide, policy.show, policy.always, policy.localhost, policy.clipboard, policy.open, profile.env];
+  return createHash("sha1").update(JSON.stringify(fixed)).digest("hex").slice(0, 12);
+}
+
+/** What a fenced pane's shell is running on, written by the process that fences it. */
+export type PaneRules = { pid: number; pen: string | null; profile: string; stamp: string };
+const paneFile = (paneId: string) => join(panesDir, `${paneId.replace(/[^A-Za-z0-9_-]/g, "_")}.json`);
+export function writePaneRules(paneId: string, rules: PaneRules): void {
+  try {
+    writeFileSync(join(ensureDir(panesDir), `${paneId.replace(/[^A-Za-z0-9_-]/g, "_")}.json`), JSON.stringify(rules), { mode: 0o600 });
+  } catch {}
+}
+export function readPaneRules(paneId: string): PaneRules | null {
+  try {
+    return JSON.parse(readFileSync(paneFile(paneId), "utf8")) as PaneRules;
+  } catch {
+    return null;
+  }
+}
+export const clearPaneRules = (paneId: string) => rmSync(paneFile(paneId), { force: true });
 
 const globToRegex = (glob: string) => new RegExp(`^${glob.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replaceAll("*", ".*")}$`);
 

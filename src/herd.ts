@@ -7,12 +7,18 @@ import { join } from "node:path";
 import { herdr, listPanes, listWorkspaces, processInfo, type PaneInfo } from "./herdr/client.ts";
 import { cliPath, ensureDir, fenceBin, stateDir } from "./paths.ts";
 import { addPen, penForWorkspace, readPens, removePen, updatePen, type Pen } from "./pens.ts";
+import { makePolicy, readPaneRules, rulesStamp } from "./policy.ts";
 import { DEFAULT_PROFILE, loadProfile } from "./profile.ts";
 
 export const PEN_MARK = "🐑";
 
 export type PaneState =
-  | { state: "fenced" }
+  /**
+   * `idle`: only a shell is running inside, so it can be restarted without losing work.
+   * `running`: what's in the foreground otherwise. `rules`: what its shell was started
+   * with; null for a shell fenced by an older fence, which can't be restarted in place.
+   */
+  | { state: "fenced"; idle: boolean; running: string | null; rules: { pid: number; profile: string; stamp: string } | null }
   /** A plugin's own pane (like this window): not a shell, nothing to fence. */
   | { state: "plugin" }
   | { state: "shell" }
@@ -64,8 +70,11 @@ export async function paneState(paneId: string): Promise<PaneState> {
   }
   if (!info?.shell_pid) return { state: "gone" };
   const top = commandOf(info.shell_pid);
-  if (top.includes(`${fenceCli} shell`)) return { state: "fenced" };
   const fg = info.foreground_processes ?? [];
+  if (top.includes(`${fenceCli} shell`)) {
+    const busy = fg.find((p) => !SHELLS.test(p.name) && !SHELLS.test((p.argv?.[0] ?? "").split("/").pop() ?? ""));
+    return { state: "fenced", idle: !busy, running: busy ? busy.cmdline || busy.name : null, rules: readPaneRules(paneId) };
+  }
   const atPrompt = info.foreground_process_group_id === info.shell_pid || fg.length === 0 || fg.every((p) => p.pid === info.shell_pid);
   const name = top.split(/\s+/)[0]?.split("/").pop() ?? "";
   if (atPrompt && SHELLS.test(name)) return { state: "shell" };
@@ -145,11 +154,60 @@ async function fenceClaimed(pen: Pen, paneId: string, waitMs: number): Promise<P
   return state;
 }
 
-export type PaneReport = { pane: PaneInfo; state: PaneState };
+/** `stale`: fenced, but on rules the pen has since changed (another profile, other hidden files). */
+export type PaneReport = { pane: PaneInfo; state: PaneState; stale?: boolean };
+
+/** The fingerprint a pane started now would have. */
+export function currentStamp(pen: Pen): string | null {
+  try {
+    const profile = loadProfile(pen.profile);
+    return rulesStamp(makePolicy(profile, { dir: pen.dir, pen }), profile);
+  } catch {
+    return null;
+  }
+}
 
 export async function penPanes(pen: Pen): Promise<PaneReport[]> {
   const panes = await listPanes(pen.workspaceId).catch(() => [] as PaneInfo[]);
-  return Promise.all(panes.map(async (pane) => ({ pane, state: await paneState(pane.pane_id) })));
+  const now = currentStamp(pen);
+  return Promise.all(
+    panes.map(async (pane) => {
+      const state = await paneState(pane.pane_id);
+      return { pane, state, stale: state.state === "fenced" && state.rules !== null && now !== null && state.rules.stamp !== now };
+    }),
+  );
+}
+
+export type Applied = { restarted: number; fenced: number; waiting: PaneReport[] };
+
+/**
+ * Put the pen's panes on its current rules: fence shells that aren't, and restart
+ * the shell in fenced panes that are on old rules. Only idle panes are touched;
+ * one that's running something (an agent, a server) is left alone and reported.
+ */
+export async function applyToPanes(pen: Pen): Promise<Applied> {
+  const out: Applied = { restarted: 0, fenced: 0, waiting: [] };
+  for (const r of await penPanes(pen)) {
+    const s = r.state;
+    if (s.state === "shell") {
+      const after = await fencePane(pen, r.pane.pane_id, 3000);
+      if (after.state === "fenced") out.fenced++;
+      else out.waiting.push({ ...r, state: after });
+    } else if (s.state === "busy") out.waiting.push(r);
+    else if (s.state === "fenced" && r.stale) {
+      if (!s.idle || !s.rules) {
+        out.waiting.push(r);
+        continue;
+      }
+      try {
+        process.kill(s.rules.pid, "SIGUSR1");
+        out.restarted++;
+      } catch {
+        out.waiting.push(r);
+      }
+    }
+  }
+  return out;
 }
 
 /** Fence whatever in the pen can be fenced; returns the panes that couldn't be. */

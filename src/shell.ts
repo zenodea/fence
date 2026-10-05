@@ -10,7 +10,7 @@ import { createGate } from "./herdr/gate.ts";
 import { createProxy } from "./net/proxy.ts";
 import { ensureDir, herdrSocketPath, runDir } from "./paths.ts";
 import { penById, type Pen } from "./pens.ts";
-import { makePolicy, penEnv, proxyEnv, type Policy } from "./policy.ts";
+import { clearPaneRules, makePolicy, penEnv, proxyEnv, rulesStamp, writePaneRules, type Policy } from "./policy.ts";
 import { loadProfile, type Profile } from "./profile.ts";
 import { bwrapAvailable, BRIDGE_PORT, INSIDE, linuxCommand } from "./sandbox/linux.ts";
 import { followDenials, isNoise, isRoutine, type Follower } from "./sandbox/maclog.ts";
@@ -56,9 +56,22 @@ export async function runFenced(run: FencedRun): Promise<number> {
   const problem = backendProblem();
   if (problem) throw new Error(problem);
 
-  const profile: Profile = loadProfile(run.profile);
-  const policy: Policy = makePolicy(profile, { dir: run.dir, pen: run.pen, pane: run.pane });
+  let profile: Profile = loadProfile(run.profile);
+  let policy: Policy = makePolicy(profile, { dir: run.dir, pen: run.pen, pane: run.pane });
   const penId = run.pen?.id ?? null;
+  // The pen as it is now: its profile can be switched from the window while this shell runs.
+  let looked = 0;
+  const refresh = () => {
+    if (!penId || Date.now() - looked < 1000) return;
+    looked = Date.now();
+    const pen = penById(penId);
+    if (!pen) return;
+    try {
+      const next = loadProfile(pen.profile);
+      profile = next;
+      policy = makePolicy(next, { dir: pen.dir, pen, pane: run.pane });
+    } catch {}
+  };
   const name = policy.penName;
   const mac = process.platform === "darwin";
 
@@ -70,8 +83,8 @@ export async function runFenced(run: FencedRun): Promise<number> {
 
   const seen = new Set<string>();
   const proxy = createProxy({
-    // The pen's own list is read again each time, so letting a domain through from the window works at once.
-    rules: () => [...profile.net.allow, ...((penId && penById(penId)?.allow) || [])],
+    // Read again as requests come in, so a domain let through or a profile switched works at once.
+    rules: () => (refresh(), [...new Set([...profile.net.allow, ...((penId && penById(penId)?.allow) || [])])]),
     onDecision: (d) => {
       const target = d.port === 443 || d.port === 80 ? d.host : `${d.host}:${d.port}`;
       if (d.allowed) {
@@ -125,37 +138,59 @@ export async function runFenced(run: FencedRun): Promise<number> {
   await follower?.ready;
 
   const argv = run.argv.length ? run.argv : [process.env.SHELL || "/bin/sh", "-l"];
-  const env = penEnv(process.env, profile, {
-    ...proxyEnv(proxyUrl),
-    HERDR_SOCKET_PATH: mac ? gateSocket : INSIDE.gate,
-    FENCE_ACTIVE: "1",
-    FENCE_PEN: penId ?? "",
-    FENCE_PEN_NAME: name,
-    FENCE_PROFILE: profile.name,
+  let child: ReturnType<typeof spawn> | null = null;
+  // The window asks for a restart (SIGUSR1) to put a pane on the pen's new rules: the
+  // shell inside is ended and started again in the same pane, under a fresh sandbox.
+  let restart = false;
+  process.on("SIGUSR1", () => {
+    restart = true;
+    const ending = child;
+    ending?.kill("SIGHUP");
+    setTimeout(() => ending?.exitCode === null && ending.kill("SIGKILL"), 3000).unref();
   });
-  const cwd = process.cwd().startsWith(policy.dir) ? process.cwd() : policy.dir;
-  const command = mac
-    ? macCommand(seatbeltProfile(policy, { proxyPort: Number(new URL(proxyUrl).port), gateSocket }), argv)
-    : linuxCommand(policy, { proxySocket, gateSocket }, cwd, argv);
-
-  if (!run.quiet) {
-    const domains = policy.allow.includes("*") ? "any domain" : `${policy.allow.length} domains`;
-    process.stderr.write(`${style.green("🐑 fenced")} ${style.bold(name)} ${style.dim(`· ${profile.name} · ${domains} · writes ${policy.dir.replace(process.env.HOME ?? "\0", "~")}`)}\n`);
-  }
-  record({ pen: penId, pane: run.pane, kind: "info", verdict: "info", target: `started ${argv[0]}`, detail: `profile ${profile.name}` });
-
-  const child = spawn(command[0]!, command.slice(1), { stdio: "inherit", env, cwd });
   // The terminal's keys belong to the shell inside.
   for (const sig of ["SIGINT", "SIGQUIT", "SIGTSTP", "SIGTTIN", "SIGTTOU"] as const) process.on(sig, () => {});
-  for (const sig of ["SIGTERM", "SIGHUP"] as const) process.on(sig, () => child.kill(sig));
+  for (const sig of ["SIGTERM", "SIGHUP"] as const) process.on(sig, () => child?.kill(sig));
 
-  const code = await new Promise<number>((resolve) => {
-    child.on("exit", (c, sig) => resolve(c ?? (sig ? 128 : 1)));
-    child.on("error", (err) => {
-      process.stderr.write(`fence: couldn't start the sandbox: ${err.message}\n`);
-      resolve(127);
+  let code = 0;
+  for (let first = true; first || restart; first = false) {
+    if (!first) {
+      looked = 0;
+      refresh();
+    }
+    restart = false;
+    const env = penEnv(process.env, profile, {
+      ...proxyEnv(proxyUrl),
+      HERDR_SOCKET_PATH: mac ? gateSocket : INSIDE.gate,
+      FENCE_ACTIVE: "1",
+      FENCE_PEN: penId ?? "",
+      FENCE_PEN_NAME: name,
+      FENCE_PROFILE: profile.name,
     });
-  });
+    const cwd = process.cwd().startsWith(policy.dir) ? process.cwd() : policy.dir;
+    const command = mac
+      ? macCommand(seatbeltProfile(policy, { proxyPort: Number(new URL(proxyUrl).port), gateSocket }), argv)
+      : linuxCommand(policy, { proxySocket, gateSocket }, cwd, argv);
+
+    if (!run.quiet) {
+      const domains = policy.allow.includes("*") ? "any domain" : `${policy.allow.length} domains`;
+      process.stderr.write(`${first ? "" : "\n"}${style.green(first ? "🐑 fenced" : "🐑 fenced again")} ${style.bold(name)} ${style.dim(`· ${profile.name} · ${domains} · writes ${policy.dir.replace(process.env.HOME ?? "\0", "~")}`)}\n`);
+    }
+    record({ pen: penId, pane: run.pane, kind: "info", verdict: "info", target: `${first ? "started" : "restarted"} ${argv[0]}`, detail: `profile ${profile.name}` });
+    if (run.pane) writePaneRules(run.pane, { pid: process.pid, pen: penId, profile: profile.name, stamp: rulesStamp(policy, profile) });
+
+    const running = spawn(command[0]!, command.slice(1), { stdio: "inherit", env, cwd });
+    child = running;
+    code = await new Promise<number>((resolve) => {
+      running.on("exit", (c, sig) => resolve(c ?? (sig ? 128 : 1)));
+      running.on("error", (err) => {
+        process.stderr.write(`fence: couldn't start the sandbox: ${err.message}\n`);
+        restart = false;
+        resolve(127);
+      });
+    });
+  }
+  if (run.pane) clearPaneRules(run.pane);
 
   stopTripwires();
   follower?.stop();

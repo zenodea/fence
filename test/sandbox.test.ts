@@ -5,7 +5,7 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { herdrHome } from "../src/paths.ts";
-import { makePolicy, penEnv } from "../src/policy.ts";
+import { makePolicy, penEnv, rulesStamp } from "../src/policy.ts";
 import { loadProfile, parseProfile } from "../src/profile.ts";
 import { bwrapArgs } from "../src/sandbox/linux.ts";
 import { expandGlob, matches } from "../src/glob.ts";
@@ -132,4 +132,13 @@ test("macOS: a sealed pen for real", { skip: process.platform !== "darwin" }, ()
   assert.match(status.stdout, /app\.js/);
   assert.notEqual(sh("git add app.js").status, 0, "nothing can be staged");
   assert.notEqual(sh("git commit -qam x").status, 0, "or committed");
+});
+
+test("a pane's rules fingerprint changes with file rules, not with domains", () => {
+  const dir = project();
+  const pen = { id: "t", name: "t", workspaceId: "w", dir, profile: "strict", allow: [] as string[], createdAt: "" };
+  const stamp = (profile: string, extra = {}) => rulesStamp(makePolicy(loadProfile(profile), { dir, pen: { ...pen, ...extra } }), loadProfile(profile));
+  assert.equal(stamp("strict"), stamp("strict", { allow: ["example.com"] }), "letting a domain through needs no restart");
+  assert.notEqual(stamp("strict"), stamp("sealed"), "another profile's files do");
+  assert.notEqual(stamp("strict"), stamp("strict", { hide: ["notes.md"] }), "so does hiding a file");
 });

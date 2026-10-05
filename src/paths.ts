@@ -27,6 +27,8 @@ export const pensFile = join(configDir, "pens.json");
 export const userProfilesDir = join(configDir, "profiles");
 export const builtinProfilesDir = join(pluginRoot, "profiles");
 export const logDir = join(stateDir, "log");
+/** One file per fenced pane: who runs it and on which rules. */
+export const panesDir = join(stateDir, "panes");
 
 /**
  * Sockets the fenced side talks to (the proxy and the herdr gate). Kept short:
