@@ -1,16 +1,16 @@
 // macOS: a Seatbelt profile for sandbox-exec. Everything is allowed except what
 // the policy fences off; the kernel enforces it for the shell and everything it
 // starts, and logs each denial with the pen's tag.
+import { globToRegexSource, hasGlob } from "../glob.ts";
 import type { Policy } from "../policy.ts";
 
 const q = (s: string) => `"${s.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
-const re = (s: string) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
 
-/** A path rule: a folder and what's in it, or a glob in the last part. */
+/** A path rule: a folder and what's in it, or a pattern. */
 export function pathFilter(path: string): string {
   if (path.includes('"')) throw new Error(`can't fence a path with a double quote in it: ${path}`);
-  if (!path.includes("*")) return `(subpath ${q(path)})`;
-  return `(regex #"^${path.split("*").map(re).join("[^/]*")}(/.*)?$")`;
+  if (!hasGlob(path)) return `(subpath ${q(path)})`;
+  return `(regex #"${globToRegexSource(path)}")`;
 }
 
 export type MacSockets = { proxyPort: number; gateSocket: string };
@@ -36,8 +36,22 @@ export function seatbeltProfile(p: Policy, s: MacSockets): string {
     "",
     "; hidden: secrets, herdr's socket and config, fence's own state",
     `(deny file-read* file-write* ${tag}`,
-    ...p.hide.map((h) => `  ${pathFilter(h)}`),
+    ...p.always.map((h) => `  ${pathFilter(h)}`),
     ")",
+    ...(p.hide.length
+      ? p.show.length
+        ? [
+            `(deny file-read* file-write* ${tag}`,
+            "  (require-all",
+            "    (require-any",
+            ...p.hide.map((h) => `      ${pathFilter(h)}`),
+            "    )",
+            "    (require-not (require-any",
+            ...p.show.map((h) => `      ${pathFilter(h)}`),
+            "    ))))",
+          ]
+        : [`(deny file-read* file-write* ${tag}`, ...p.hide.map((h) => `  ${pathFilter(h)}`), ")"]
+      : []),
     "",
     "; network: only fence's proxy, the herdr gate, and the localhost ports you named",
     `(deny network-outbound ${tag}`,

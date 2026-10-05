@@ -2,7 +2,8 @@
 // dir) win over the built-in ones with the same name.
 import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve, sep } from "node:path";
+import { hasGlob } from "./glob.ts";
 import { builtinProfilesDir, home, userProfilesDir } from "./paths.ts";
 import { parseToml, type TomlTable, type TomlValue } from "./toml.ts";
 
@@ -13,7 +14,8 @@ export type Profile = {
   source: "builtin" | "user";
   path: string;
   extends: string | null;
-  files: { write: string[]; protect: string[]; hide: string[] };
+  /** `show` lists exceptions to `hide`: a pattern can hide .env* and still show .env.example. */
+  files: { write: string[]; protect: string[]; hide: string[]; show: string[] };
   net: { allow: string[]; localhost: number[] };
   env: { drop: string[]; keep: string[]; set: Record<string, string> };
   system: { clipboard: boolean; open: boolean };
@@ -48,7 +50,7 @@ export function parseProfile(name: string, text: string, source: Profile["source
     source,
     path,
     extends: typeof t.extends === "string" ? t.extends : null,
-    files: { write: strings(files.write, "files.write"), protect: strings(files.protect, "files.protect"), hide: strings(files.hide, "files.hide") },
+    files: { write: strings(files.write, "files.write"), protect: strings(files.protect, "files.protect"), hide: strings(files.hide, "files.hide"), show: strings(files.show, "files.show") },
     net: { allow: strings(net.allow, "net.allow"), localhost: ports as number[] },
     env: {
       drop: strings(env.drop, "env.drop"),
@@ -91,7 +93,7 @@ export function loadProfile(name: string, seen: string[] = []): Profile {
   const both = (a: string[], b: string[]) => [...new Set([...a, ...b])];
   return {
     ...own,
-    files: { write: both(base.files.write, own.files.write), protect: both(base.files.protect, own.files.protect), hide: both(base.files.hide, own.files.hide) },
+    files: { write: both(base.files.write, own.files.write), protect: both(base.files.protect, own.files.protect), hide: both(base.files.hide, own.files.hide), show: both(base.files.show, own.files.show) },
     net: { allow: both(base.net.allow, own.net.allow), localhost: [...new Set([...base.net.localhost, ...own.net.localhost])] },
     env: { drop: both(base.env.drop, own.env.drop), keep: both(base.env.keep, own.env.keep), set: { ...base.env.set, ...own.env.set } },
     // A child only loosens these by saying so.
@@ -117,12 +119,14 @@ export function realish(path: string): string {
   }
 }
 
-/** ~, {pen} and {tmp} filled in, made absolute, symlinks followed. A trailing glob stays in the last part. */
+/** ~, {pen} and {tmp} filled in, made absolute, symlinks followed up to the first * or **. */
 export function expandPath(pattern: string, penDir: string, tmp: string = tmpdir()): string {
   let p = pattern.trim();
   if (p === "~" || p.startsWith("~/")) p = home + p.slice(1);
   p = p.replaceAll("{pen}", penDir).replaceAll("{tmp}", tmp);
   p = resolve(penDir, p);
-  const glob = p.includes("*") ? basename(p) : null;
-  return glob ? join(realish(dirname(p)), glob) : realish(p);
+  if (!hasGlob(p)) return realish(p);
+  const segs = p.split(sep);
+  const first = segs.findIndex(hasGlob);
+  return join(realish(segs.slice(0, first).join(sep) || sep), ...segs.slice(first));
 }

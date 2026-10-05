@@ -17,6 +17,10 @@ export type Policy = {
   write: string[];
   protect: string[];
   hide: string[];
+  /** Exceptions to `hide`. */
+  show: string[];
+  /** Hidden whatever the profile or the pen says. */
+  always: string[];
   allow: string[];
   localhost: number[];
   clipboard: boolean;
@@ -45,7 +49,9 @@ export function makePolicy(profile: Profile, opts: { dir: string; pen?: Pen | nu
     write: expand(profile.files.write),
     // fence itself and its sockets stay out of reach even when the pen's folder holds them.
     protect: expand([...profile.files.protect, pluginRoot, runDir]),
-    hide: expand([...profile.files.hide, ...ALWAYS_HIDDEN]),
+    hide: expand([...profile.files.hide, ...(opts.pen?.hide ?? [])]),
+    show: expand([...profile.files.show, ...(opts.pen?.show ?? [])]),
+    always: expand(ALWAYS_HIDDEN),
     allow: [...new Set([...profile.net.allow, ...(opts.pen?.allow ?? [])])],
     localhost: profile.net.localhost,
     clipboard: profile.system.clipboard,
@@ -106,7 +112,8 @@ export function describePolicy(p: Policy): string[] {
     "read-only inside those",
     ...p.protect.map((w) => `  ${w}`),
     "hidden",
-    ...p.hide.map((w) => `  ${w}`),
+    ...[...p.always, ...p.hide].map((w) => `  ${w}`),
+    ...(p.show.length ? ["shown all the same", ...p.show.map((w) => `  ${w}`)] : []),
     "domains",
     ...p.allow.map((d) => `  ${d}`),
     ...(p.localhost.length ? ["localhost ports", ...p.localhost.map((port) => `  ${port}`)] : []),

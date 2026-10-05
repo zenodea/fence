@@ -3,9 +3,10 @@
 // network but its own localhost. A tiny bridge inside forwards one localhost
 // port to fence's proxy, which sits outside on a unix socket.
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { readFileSync, statSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { expandGlob as existing, matchesAny } from "../glob.ts";
 import type { Policy } from "../policy.ts";
 
 /** Where the pen finds fence's sockets. */
@@ -17,17 +18,6 @@ export const BRIDGE_PORT = 3128;
 export function bwrapAvailable(): boolean {
   const r = spawnSync("bwrap", ["--ro-bind", "/", "/", "--unshare-net", "--unshare-pid", "true"], { stdio: "ignore" });
   return r.status === 0;
-}
-
-/** A trailing glob matched against what's there now: bind mounts need real files. */
-function existing(path: string): string[] {
-  if (!path.includes("*")) return existsSync(path) ? [path] : [];
-  const dir = dirname(path);
-  if (!existsSync(dir)) return [];
-  const re = new RegExp(`^${basename(path).replace(/[.+?^${}()|[\]\\]/g, "\\$&").replaceAll("*", "[^/]*")}$`);
-  return readdirSync(dir)
-    .filter((f) => re.test(f))
-    .map((f) => join(dir, f));
 }
 
 const isDir = (path: string) => {
@@ -62,7 +52,9 @@ export function bwrapArgs(p: Policy, s: LinuxSockets, cwd: string): string[] {
     args.push("--bind", w, w);
   }
   for (const r of p.protect.flatMap(existing)) args.push("--ro-bind", r, r);
-  for (const h of p.hide.flatMap(existing)) {
+  // Mounts need real paths, so patterns hide what's there when the pen's shell starts.
+  const hidden = [...p.always.flatMap(existing), ...p.hide.flatMap(existing).filter((h) => !matchesAny(h, p.show))];
+  for (const h of hidden) {
     if (isDir(h)) args.push("--tmpfs", h);
     else args.push("--ro-bind", "/dev/null", h);
   }

@@ -14,6 +14,10 @@ export type Pen = {
   profile: string;
   /** Domains let through from the pen's window, on top of the profile's. */
   allow: string[];
+  /** Paths hidden from the pen's window, on top of the profile's. Relative ones are inside the pen. */
+  hide?: string[];
+  /** Paths shown to the pen although the profile hides them. */
+  show?: string[];
   createdAt: string;
 };
 
