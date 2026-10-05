@@ -77,18 +77,26 @@ list --plugin fence` shows its `plugin_root`) onto your `PATH`, e.g.
 
 - **Pen** (`o`): the pen's folder and profile, and every pane in it: fenced, or what's running outside the fence. In a space that isn't a pen: `n` makes a new pen (a new space for the focused pane's folder), `f` fences this space, `p` picks the profile.
 - **Gates** (`g`): what was stopped lately, with `a` to let it through; the domains you've let through, with `x` to fence them off again; `+` to type one in. The profile's own domains are listed underneath.
+- **Files** (`h`): what the pen reached for and couldn't have, the files in its folder that are hidden right now, and the patterns hiding them. `+` hides a path or pattern for this pen, `u` shows a hidden file to it, `x` takes back what you changed. File rules are fixed when a pane's shell starts, so changes reach new panes; fenced shells keep theirs until they exit.
 - **Log** (`l`): everything that happened at the fence.
 - **All pens** (`s`): every pen; `enter` goes there.
 
 ## Profiles
 
-A pen uses a profile. Three are built in:
+A pen uses a profile. Four are built in:
 
 | profile | files | network |
 |---|---|---|
+| `sealed` | strict, with the pen's own secrets hidden (`.env*`, keys, `credentials.json`, `*.tfstate`, `.npmrc`…) and `.git` read-only | as strict |
 | `strict` | the pen's folder, `/tmp`, the agents' state | the agents' model APIs only |
 | `standard` (default) | strict, plus package manager caches | strict, plus package registries (npm, PyPI, crates.io, Go, RubyGems, Maven) and GitHub |
 | `open` | as standard | any domain, still through the proxy, so it's all in the log |
+
+`sealed` is for running an agent next to credentials you can't move out of the project,
+or on code you don't want it committing to. The agent can still read history, diff and
+log; it can't stage, commit or rewrite. Because hiding applies to everything in the pen,
+tests and dev servers started there can't read `.env` either: give them stand-in values
+under `[env.set]` in a profile of your own that extends `sealed`.
 
 Write your own in `~/.config/herdr/plugins/config/fence/profiles/NAME.toml` (that folder
 is hidden from every pen). One with the same name as a built-in one replaces it.
@@ -114,8 +122,11 @@ NODE_ENV = "development"
 clipboard = true            # macOS
 ```
 
-Lists add up through `extends`. Paths take `~`, `{pen}` (the pen's folder) and `{tmp}`, and
-a `*` in the last part (`{pen}/.claude/settings*.json`). Domains: `example.com` (ports 80
+Lists add up through `extends`. Paths take `~`, `{pen}` (the pen's folder) and `{tmp}`.
+`*` matches within one name (`{pen}/.claude/settings*.json`) and `**` any number of folders
+(`{pen}/**/.env*`). `show` lists exceptions to `hide`, so a profile can hide `.env*` and still
+show `.env.example`. On Linux, patterns hide the files that exist when a pane's shell
+starts, and `**` doesn't search `node_modules` or `.git`. Domains: `example.com` (ports 80
 and 443), `*.example.com` (any subdomain), `example.com:8443`, or `*`.
 
 **Tripwires** watch files a pen has to be able to write but where a change runs code
@@ -131,6 +142,7 @@ fence pen [--profile P]                        make the focused space a pen
 fence unpen                                    stop fencing it (fenced shells stay fenced until they exit)
 fence run [--profile P] [--dir D] -- CMD...    one command, fenced, anywhere
 fence allow DOMAIN [--pen ID]                  let a domain through (disallow to undo)
+fence hide PATH [--pen ID]                     hide a file or pattern from a pen (show to undo, or to show one the profile hides)
 fence status                                   every pen and whether each pane is fenced
 fence log [--pen ID]                           what happened at a pen's fence
 fence profiles                                 the profiles there are
@@ -145,7 +157,9 @@ you can open a gate.
 Worth knowing, so the fence isn't trusted for more than it is:
 
 - **Allowed domains can carry data out.** The proxy sees the domain, not what's inside the TLS. With GitHub allowed, an agent can push to a repo or make a gist; with only the model APIs allowed, the agent's own conversation is still a channel. `strict` keeps that list as short as it gets.
-- **What's in the pen's folder is the agent's.** A `.env` in the project can be read.
+- **What's in the pen's folder is the agent's**, unless you hide it. A `.env` in the project can be read in every profile but `sealed`. Hidden files still show up by name in a listing; it's their contents that can't be read.
+- **Hiding a file hides it from everything in the pen.** The sandbox can't tell the agent from what the agent runs, so with `.env` hidden, a test or dev server started inside the pen can't read it either.
+- **Toasts for blocked files are best effort.** They come from the macOS system log, which sometimes folds repeats of the same denial together. The block itself always holds. On Linux there are no file toasts at all.
 - **The keychain stays reachable** (macOS). Claude Code keeps its login there, so a pen can ask for keychain items; macOS still asks you before handing over anything whose access list doesn't include the asking program. fence does stop `git` asking the keychain for your GitHub credentials.
 - **Agent config that has to be writable.** `~/.claude.json` holds MCP servers that run outside the pen later, and Claude Code must be able to write it. The tripwire tells you when they change; it can't prevent it.
 - **Seatbelt is deprecated by Apple** (still used by Chrome, Codex and Claude Code, and still enforced by the kernel). If it goes away, fence will need another macOS backend.
