@@ -1,0 +1,7 @@
+# open: files fenced as in standard, but any domain is let through. Every
+# connection still goes through fence's proxy, so it's in the pen's log.
+description = "standard's files, any domain (still logged)"
+extends = "standard"
+
+[net]
+allow = ["*"]

@@ -1,0 +1,142 @@
+# strict: the pen's folder and the agents' own state are writable, secrets are
+# hidden, and the only way out is to the agents' model APIs.
+#
+# {pen} is the pen's folder, {tmp} a temp folder, ~ your home.
+description = "Write the pen's folder, reach only the agents' model APIs"
+
+[files]
+# Everything else is read-only.
+write = [
+  "{pen}",
+  "{tmp}",
+  # Claude Code and others use /tmp directly (on Linux the pen gets its own)
+  "/tmp",
+  # agents keep sessions, history and caches here
+  "~/.claude",
+  "~/.claude.json*",
+  "~/.codex",
+  "~/.gemini",
+  "~/.pi",
+  "~/.config/opencode",
+  "~/.local/share/opencode",
+  "~/.config/amp",
+  "~/.local/share/amp",
+  "~/.cache",
+  "~/Library/Caches",
+]
+
+# Read-only even inside the folders above: things that run code later, outside
+# the pen (git hooks, agent hooks and settings, direnv, editor tasks).
+protect = [
+  "{pen}/.git/hooks",
+  "{pen}/.git/config",
+  "{pen}/.claude/settings*.json",
+  "{pen}/.codex/config.toml",
+  "{pen}/.envrc",
+  "{pen}/.vscode",
+  "{pen}/.zed",
+  "{pen}/.idea",
+  "~/.claude/settings*.json",
+  "~/.claude/hooks",
+  "~/.claude/plugins",
+  "~/.claude/CLAUDE.md",
+  "~/.codex/config.toml",
+  "~/.codex/AGENTS.md",
+  "~/.gemini/settings.json",
+  "~/.config/opencode/opencode.json",
+]
+
+# Can't be read or written.
+hide = [
+  "~/.ssh",
+  "~/.gnupg",
+  "~/.aws",
+  "~/.azure",
+  "~/.config/gcloud",
+  "~/.kube",
+  "~/.docker",
+  "~/.config/gh",
+  "~/.config/op",
+  "~/.config/1Password",
+  "~/.netrc",
+  "~/.git-credentials",
+  "~/.npmrc",
+  "~/.pypirc",
+  "~/.password-store",
+  "~/.config/shepherd",
+  "~/.zsh_history",
+  "~/.bash_history",
+  "~/.local/share/fish/fish_history",
+  "~/Library/Cookies",
+  "~/Library/Messages",
+  "~/Library/Mail",
+  "~/Library/Application Support/Google/Chrome",
+  "~/Library/Application Support/BraveSoftware",
+  "~/Library/Application Support/Firefox",
+  "~/.config/google-chrome",
+  "~/.config/BraveSoftware",
+  "~/.mozilla",
+]
+
+[net]
+# Through fence's proxy. "*.example.com" means any subdomain; add ":port" for
+# anything other than 80 and 443; "*" lets every domain through (still logged).
+allow = [
+  "api.anthropic.com",
+  "*.anthropic.com",
+  "claude.ai",
+  "api.openai.com",
+  "chatgpt.com",
+  "*.chatgpt.com",
+  "generativelanguage.googleapis.com",
+  "cloudcode-pa.googleapis.com",
+  "oauth2.googleapis.com",
+  "ampcode.com",
+  "*.ampcode.com",
+  "opencode.ai",
+  "models.dev",
+]
+# Ports on this machine the pen may connect to (macOS; on Linux the pen has its
+# own localhost and anything it starts there just works).
+localhost = []
+
+[env]
+# Dropped from the pen's environment. * matches anything.
+drop = [
+  "*_TOKEN",
+  "*_TOKEN_*",
+  "*_SECRET",
+  "*_SECRET_*",
+  "*_PASSWORD",
+  "*_API_KEY",
+  "*_ACCESS_KEY*",
+  "AWS_*",
+  "AZURE_*",
+  "GOOGLE_APPLICATION_CREDENTIALS",
+  "SSH_AUTH_SOCK",
+  "GPG_AGENT_INFO",
+  "DOCKER_HOST",
+  "KUBECONFIG",
+  "OP_*",
+  "HERDR_CLIENT_SOCKET_PATH",
+  "SUPERSET_*",
+]
+# Kept even when a pattern above matches: the agents need their own keys.
+keep = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"]
+
+# Set in the pen. Telemetry would only be stopped at the fence (and toast you
+# every time), so the agents are asked not to send it.
+[env.set]
+CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"
+DISABLE_TELEMETRY = "1"
+DO_NOT_TRACK = "1"
+
+[system]
+# macOS: let the pen read and write the clipboard, and open apps and URLs.
+clipboard = false
+open = false
+
+# Tell you if these change while a pen is open: an agent adding an MCP server or
+# a hook here gets it run outside the pen next time.
+[tripwires]
+watch = ["~/.claude.json#mcpServers", "~/.claude.json#hooks"]

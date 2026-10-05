@@ -1,0 +1,38 @@
+# standard: strict, plus package registries and GitHub, so an agent can install
+# dependencies and clone. GitHub can also be used to send data out (a gist, a
+# push), so pick strict when that matters.
+description = "strict, plus package registries and GitHub"
+extends = "strict"
+
+[files]
+write = [
+  "~/.npm",
+  "~/.bun/install/cache",
+  "~/.local/share/pnpm",
+  "~/Library/pnpm",
+  "~/.yarn",
+  "~/.cargo/registry",
+  "~/.cargo/git",
+  "~/go/pkg/mod",
+  "~/.gradle/caches",
+  "~/.m2/repository",
+]
+
+[net]
+allow = [
+  "registry.npmjs.org",
+  "registry.yarnpkg.com",
+  "pypi.org",
+  "files.pythonhosted.org",
+  "crates.io",
+  "index.crates.io",
+  "static.crates.io",
+  "proxy.golang.org",
+  "sum.golang.org",
+  "rubygems.org",
+  "repo.maven.apache.org",
+  "github.com",
+  "api.github.com",
+  "codeload.github.com",
+  "*.githubusercontent.com",
+]
