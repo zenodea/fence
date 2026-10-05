@@ -8,6 +8,7 @@ import { herdrHome } from "../src/paths.ts";
 import { makePolicy, penEnv } from "../src/policy.ts";
 import { loadProfile, parseProfile } from "../src/profile.ts";
 import { bwrapArgs } from "../src/sandbox/linux.ts";
+import { expandGlob, matches } from "../src/glob.ts";
 import { parseDenial } from "../src/sandbox/maclog.ts";
 import { seatbeltProfile } from "../src/sandbox/macos.ts";
 
@@ -31,7 +32,9 @@ test("the built-in profiles load and extend each other", () => {
 test("herdr's socket and config are hidden whatever the profile says", () => {
   const empty = parseProfile("empty", "", "user", "/dev/null");
   const policy = makePolicy(empty, { dir: project() });
-  assert.ok(policy.hide.includes(realpathSync(herdrHome)) || policy.hide.includes(herdrHome));
+  assert.ok(policy.always.includes(realpathSync(herdrHome)) || policy.always.includes(herdrHome));
+  const shown = makePolicy(parseProfile("s", `[files]\nshow = ["~/.config/herdr"]`, "user", "-"), { dir: project() });
+  assert.ok(seatbeltProfile(shown, { proxyPort: 1, gateSocket: "/x" }).includes(`(subpath "${shown.always[0]}")`), "show can't unhide it");
 });
 
 test("secrets are dropped from the environment, the agent's own keys kept", () => {
@@ -76,4 +79,57 @@ test("macOS: the generated profile really fences a shell", { skip: process.platf
   assert.notEqual(sh("/usr/bin/curl -s -m 3 --noproxy '*' https://example.com").status, 0, "no direct network");
   assert.notEqual(sh(`kill -0 ${process.pid}`).status, 0, "can't signal a process outside the pen");
   assert.equal(sh("sleep 5 & kill $!").status, 0, "can signal its own");
+});
+
+test("patterns: * stays in one name, ** crosses folders, a plain path covers what's under it", () => {
+  assert.ok(matches("/p/.env", "/p/**/.env*"));
+  assert.ok(matches("/p/apps/api/.env.local", "/p/**/.env*"));
+  assert.ok(!matches("/p/apps/api/env.ts", "/p/**/.env*"));
+  assert.ok(matches("/p/.git/hooks/pre-commit", "/p/.git"));
+  assert.ok(!matches("/p/.github/x", "/p/.git"));
+  assert.ok(matches("/p/.claude/settings.local.json", "/p/.claude/settings*.json"));
+  assert.ok(!matches("/p/a/b.key", "/p/*.key"));
+});
+
+test("patterns expand to the files that are there, skipping node_modules", () => {
+  const dir = project();
+  mkdirSync(join(dir, "apps", "api"), { recursive: true });
+  mkdirSync(join(dir, "node_modules", "x"), { recursive: true });
+  for (const f of [".env", "apps/api/.env.local", "apps/api/.env.example", "node_modules/x/.env", "apps/api/server.key"]) writeFileSync(join(dir, f), "x");
+  assert.deepEqual(expandGlob(join(dir, "**", ".env*")).map((p) => p.slice(dir.length + 1)).sort(), [".env", "apps/api/.env.example", "apps/api/.env.local"]);
+});
+
+test("sealed: the pen's secrets are hidden, templates shown, .git read-only", () => {
+  const sealed = loadProfile("sealed");
+  assert.ok(sealed.net.allow.includes("api.anthropic.com") && !sealed.net.allow.includes("github.com"), "strict's network");
+  const dir = project();
+  mkdirSync(join(dir, "apps", "api"), { recursive: true });
+  for (const f of [".env", "apps/api/.env.local", "apps/api/.env.example"]) writeFileSync(join(dir, f), "SECRET=1");
+  const policy = makePolicy(sealed, { dir, pen: { id: "t", name: "t", workspaceId: "w", dir, profile: "sealed", allow: [], createdAt: "", hide: ["notes/private.md"], show: [] } });
+  assert.ok(policy.hide.includes(join(dir, "notes/private.md")), "a pen's own hidden paths are inside the pen");
+  const args = bwrapArgs(policy, { proxySocket: "/x/p.sock", gateSocket: "/x/g.sock" }, dir).join(" ");
+  assert.ok(args.includes(`--ro-bind /dev/null ${join(dir, ".env")}`));
+  assert.ok(args.includes(`--ro-bind /dev/null ${join(dir, "apps/api/.env.local")}`));
+  assert.ok(!args.includes(`/dev/null ${join(dir, "apps/api/.env.example")}`));
+  assert.ok(args.includes(`--ro-bind ${join(dir, ".git")} ${join(dir, ".git")}`));
+});
+
+test("macOS: a sealed pen for real", { skip: process.platform !== "darwin" }, () => {
+  const dir = project();
+  spawnSync("git", ["init", "-q", dir]);
+  mkdirSync(join(dir, "apps", "api"), { recursive: true });
+  for (const f of [".env", "apps/api/.env.local", "apps/api/.env.example", "app.js"]) writeFileSync(join(dir, f), "SECRET=1");
+  const policy = makePolicy(loadProfile("sealed"), { dir });
+  const profile = seatbeltProfile(policy, { proxyPort: 1, gateSocket: "/nonexistent" });
+  const sh = (script: string) => spawnSync("/usr/bin/sandbox-exec", ["-p", profile, "/bin/sh", "-c", script], { cwd: dir, encoding: "utf8", env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" } });
+  assert.notEqual(sh("cat .env").status, 0, ".env is hidden");
+  assert.notEqual(sh("cat apps/api/.env.local").status, 0, "nested .env files are hidden");
+  assert.equal(sh("cat apps/api/.env.example").status, 0, "templates are shown");
+  assert.equal(sh("echo new > apps/api/.env.example").status, 0, "and writable");
+  assert.equal(sh("echo ok >> app.js").status, 0, "code is writable");
+  const status = sh("git status --short");
+  assert.equal(status.status, 0, "git status works on a read-only .git: " + status.stderr);
+  assert.match(status.stdout, /app\.js/);
+  assert.notEqual(sh("git add app.js").status, 0, "nothing can be staged");
+  assert.notEqual(sh("git commit -qam x").status, 0, "or committed");
 });

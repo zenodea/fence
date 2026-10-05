@@ -1,0 +1,41 @@
+# sealed: strict, with the pen's own secrets hidden and its git history read-only.
+# For running an agent on code you don't want it to commit to, or next to
+# credentials you can't move out of the project.
+#
+# The sandbox can't tell the agent from what the agent runs: with .env hidden,
+# tests and dev servers started inside the pen can't read it either. Give them
+# stand-in values under [env.set] in a profile of your own that extends this one.
+description = "strict, with .env and keys hidden and .git read-only"
+extends = "strict"
+
+[files]
+# ** is any number of folders (node_modules and .git are not searched on Linux).
+hide = [
+  "{pen}/**/.env*",
+  "{pen}/**/*.key",
+  "{pen}/**/*-key.pem",
+  "{pen}/**/*.p12",
+  "{pen}/**/*.pfx",
+  "{pen}/**/id_rsa*",
+  "{pen}/**/id_ed25519*",
+  "{pen}/**/credentials.json",
+  "{pen}/**/service-account*.json",
+  "{pen}/**/*.tfstate",
+  "{pen}/**/*.tfstate.backup",
+  "{pen}/**/*.tfvars",
+  "{pen}/**/.npmrc",
+  "{pen}/**/.netrc",
+  "{pen}/**/.pypirc",
+]
+# Shown all the same: templates with no secrets in them.
+show = [
+  "{pen}/**/.env.example",
+  "{pen}/**/.env.sample",
+  "{pen}/**/.env.template",
+]
+# The agent can read the history, diff and log; it can't stage, commit or rewrite.
+protect = ["{pen}/.git"]
+
+[env.set]
+# Lets `git status` and `git diff` work without writing to the read-only .git.
+GIT_OPTIONAL_LOCKS = "0"
