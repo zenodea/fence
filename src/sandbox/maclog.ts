@@ -25,7 +25,22 @@ export function isRoutine(d: MacDenial): boolean {
   return /\/\.(zsh|bash)_history|\/\.zcompdump|\/\.zsh_sessions\/|\/\.DS_Store$|\/\.local\/share\/fish\/fish_history/.test(d.target);
 }
 
-export function followDenials(tag: string, onDenial: (d: MacDenial) => void): ChildProcess | null {
+export type Follower = {
+  stop: () => void;
+  /** Resolves once denials are really being heard (or after a moment, if that can't be confirmed). */
+  ready: Promise<void>;
+};
+
+const PROBE_FILE = "/private/tmp/.fence-probe";
+const PROBE_EVERY_MS = 150;
+const PROBE_GIVE_UP_MS = 3000;
+
+/**
+ * `log stream` prints its header before it's attached, so that says nothing.
+ * To know it hears us, cause a tagged denial on purpose (a write the probe's own
+ * tiny sandbox refuses) until one comes back through the stream.
+ */
+export function followDenials(tag: string, onDenial: (d: MacDenial) => void): Follower | null {
   let child: ChildProcess;
   try {
     child = spawn("/usr/bin/log", ["stream", "--style", "ndjson", "--level", "default", "--predicate", `eventMessage CONTAINS "${tag}"`], {
@@ -35,6 +50,23 @@ export function followDenials(tag: string, onDenial: (d: MacDenial) => void): Ch
     return null;
   }
   child.on("error", () => {});
+
+  const probeTag = `${tag}probe`;
+  let heard!: () => void;
+  const ready = new Promise<void>((resolve) => (heard = resolve));
+  const probe = () => {
+    const p = spawn("/usr/bin/sandbox-exec", ["-p", `(version 1)(allow default)(deny file-write* (with message "${probeTag}") (literal "${PROBE_FILE}"))`, "/usr/bin/touch", PROBE_FILE], { stdio: "ignore" });
+    p.on("error", () => {});
+  };
+  const probing = setInterval(probe, PROBE_EVERY_MS);
+  const giveUp = setTimeout(() => heard(), PROBE_GIVE_UP_MS);
+  void ready.then(() => {
+    clearInterval(probing);
+    clearTimeout(giveUp);
+  });
+  child.on("exit", () => heard());
+  probe();
+
   child.stdout!.on(
     "data",
     lineReader((line) => {
@@ -45,9 +77,10 @@ export function followDenials(tag: string, onDenial: (d: MacDenial) => void): Ch
         return;
       }
       if (typeof message !== "string" || !message.includes(tag)) return;
+      if (message.includes(probeTag)) return heard();
       const d = parseDenial(message);
       if (d) onDenial(d);
     }),
   );
-  return child;
+  return { stop: () => (heard(), child.kill()), ready };
 }

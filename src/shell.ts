@@ -1,7 +1,7 @@
 // `fence shell` and `fence run`: start the pen's proxy and herdr gate, then run
 // the shell (or a command) inside the sandbox and stay alongside it until it
 // exits. This process is outside the fence; everything it starts is inside.
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync, rmSync } from "node:fs";
 import type { Server } from "node:net";
 import { join } from "node:path";
@@ -13,7 +13,7 @@ import { penById, type Pen } from "./pens.ts";
 import { makePolicy, penEnv, proxyEnv, type Policy } from "./policy.ts";
 import { loadProfile, type Profile } from "./profile.ts";
 import { bwrapAvailable, BRIDGE_PORT, INSIDE, linuxCommand } from "./sandbox/linux.ts";
-import { followDenials, isNoise, isRoutine } from "./sandbox/maclog.ts";
+import { followDenials, isNoise, isRoutine, type Follower } from "./sandbox/maclog.ts";
 import { macCommand, seatbeltProfile } from "./sandbox/macos.ts";
 import { watchTripwires } from "./tripwire.ts";
 import { style } from "./ui/ansi.ts";
@@ -105,7 +105,7 @@ export async function runFenced(run: FencedRun): Promise<number> {
     denied({ pen: penId, pane: run.pane, kind: "tripwire", target: t.spec }, name, `${t.spec} changed`, `${name} · check it before you next run that agent outside a pen`);
   });
 
-  let follower: ChildProcess | null = null;
+  let follower: Follower | null = null;
   if (mac) {
     follower = followDenials(policy.tag, (d) => {
       if (isNoise(d)) return;
@@ -120,6 +120,9 @@ export async function runFenced(run: FencedRun): Promise<number> {
       denied({ pen: penId, pane: run.pane, kind, target, detail: `${d.process}: ${d.operation}` }, name, denialTitle(d.operation, shown, d.process), `${name} · ${d.process} · prefix+p to see the pen`);
     });
   }
+
+  // Wait for the log to be followed, or what the shell does in its first second goes unheard.
+  await follower?.ready;
 
   const argv = run.argv.length ? run.argv : [process.env.SHELL || "/bin/sh", "-l"];
   const env = penEnv(process.env, profile, {
@@ -155,7 +158,7 @@ export async function runFenced(run: FencedRun): Promise<number> {
   });
 
   stopTripwires();
-  follower?.kill();
+  follower?.stop();
   proxy.close();
   gate.close();
   for (const s of [gateSocket, proxySocket]) rmSync(s, { force: true });
