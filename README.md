@@ -23,7 +23,7 @@ internet.
 | **Later, outside** | Things that run code *outside* the pen later stay read-only even inside the pen's folder: `.git/hooks`, `.git/config`, `.claude/settings.json`, `.envrc`, `.vscode`, your agents' global settings and hooks. |
 | **Network** | Every connection goes through fence's proxy, which only lets through the domains on the pen's list. Going around the proxy is blocked by the kernel. This machine (`localhost`, so Shepherd, graphdiff and your dev servers) and cloud metadata addresses are never reachable. |
 | **herdr** | A pen can't talk to herdr's socket, so it can't open an unfenced pane, type into another pane or read one. Agents can still report their status for their own pane, so herdr's sidebar keeps working. |
-| **Other apps** (macOS) | No Apple Events (no `osascript` telling Terminal to run something), no `open`, no clipboard. |
+| **Other apps** (macOS) | No Apple Events (no `osascript` telling Terminal to run something), no `open`, no clipboard, and no signals to processes outside the pen (it can't kill herdr or your editor). |
 
 When something is stopped at the fence you get a herdr toast ("🐑 blocked pastebin.com").
 Press `prefix+p` to see the pen and let that domain through if it should be. It works at

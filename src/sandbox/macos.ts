@@ -47,6 +47,10 @@ export function seatbeltProfile(p: Policy, s: MacSockets): string {
     `    (remote unix-socket (path-literal ${q(s.gateSocket)}))`,
     "  )))",
     "",
+    "; signals: only to what runs inside this pen, so it can't kill herdr or your editor",
+    `(deny signal ${tag})`,
+    "(allow signal (target same-sandbox))",
+    "",
     "; other apps: no Apple Events (osascript telling Terminal to run something)",
     `(deny appleevent-send ${tag})`,
   ];

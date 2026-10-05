@@ -74,4 +74,6 @@ test("macOS: the generated profile really fences a shell", { skip: process.platf
   assert.notEqual(sh("echo x > .git/hooks/pre-commit").status, 0, "can't plant a git hook");
   assert.notEqual(sh("cat secret").status, 0, "can't read hidden files");
   assert.notEqual(sh("/usr/bin/curl -s -m 3 --noproxy '*' https://example.com").status, 0, "no direct network");
+  assert.notEqual(sh(`kill -0 ${process.pid}`).status, 0, "can't signal a process outside the pen");
+  assert.equal(sh("sleep 5 & kill $!").status, 0, "can signal its own");
 });
